@@ -1,7 +1,14 @@
 import pyimod
 
 def nucleus(fnamein, fnameout):
-    mod = pyimod.ImodModel(fnamein)
+
+    # If a file is supplied, load the file. If not, proceed with the ImodModel
+    # object.
+    typein = type(fnamein).__name__
+    if typein == 'str':
+        mod = pyimod.ImodModel(fnamein)
+    elif typein == 'ImodModel':
+        mod = fnamein
 
     # Remove small contours (i.e. contours having <= 2 points. These are likely
     # erroneous, and are prone to creating spikes in the surface in Amira that
