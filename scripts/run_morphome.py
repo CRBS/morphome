@@ -2,8 +2,13 @@
 
 import sys
 import os
+import re
+import shutil
+import subprocess
+import datetime
 import pyimod
 import morphome
+import numpy as np
 from optparse import OptionParser
 
 def parse_args():
@@ -41,15 +46,71 @@ def usage(errstr):
     print ""
     exit(1)
 
+def print_header():
+    strDate = str(datetime.datetime.now())
+    date, time = strDate.split()
+    time = time.split('.')[0]
+    print "                            _      ____  __  __ ______ " 
+    print "                           | |    / __ \|  \/  |  ____|"
+    print " _ __ ___   ___  _ __ _ __ | |__ | |  | | \  / | |__   "
+    print "| '_ ` _ \ / _ \| '__| '_ \| '_ \| |  | | |\/| |  __|  "
+    print "| | | | | | (_) | |  | |_) | | | | |__| | |  | | |____ "
+    print "|_| |_| |_|\___/|_|  | .__/|_| |_|\____/|_|  |_|______|"
+    print "                     | |                               "   
+    print "                     |_|                               "
+    print ""
+    print "   Quantifying morphology from microscopic big data    "
+    print "    https://github.com/slash-segmentation/morphome     "
+    print ""
+    print "                 {0} {1}".format(date, time)
+    print ""
+
 def nucleus(model, basename):
-    morphome.preprocess.nucleus(model, basename + '.wrl')
+    fnamewrl = os.path.join(pathOut, basename + '.wrl')
+    fnamehx = os.path.join(pathOut, basename + '.hx')
+
+    # Run nucleus pre-processing
+    morphome.preprocess.nucleus(model, fnamewrl)
+
+    # Copy nucleus workflow template .hx file to the output path. Replace
+    # all instances of <FILENAME> with the appropriate file name.
+    shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_nucleus.hx'),
+        fnamehx)
+    regex_filename = re.compile(r"<FILENAME>")
+    regex_pathout = re.compile(r"<PATH_OUT>")
+    fid2 = open(fnamehx + '.new', 'w')
+    with open(fnamehx, 'rw') as fid:
+        for line in fid:
+            line = regex_filename.sub(fnamewrl, line)
+            line = regex_pathout.sub(pathOut, line)
+            fid2.write(line)
+    fid.close()
+    fid2.close()
+    shutil.move(fnamehx + '.new', fnamehx)
+
+    # Run the script in Amira
+    cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
+    subprocess.call(cmd.split())
+
+    # Find nuclear envelope folds
+    fshapeindex = os.path.join(pathOut, basename + '_shapeindex.am')
+    fgrad = os.path.join(pathOut, basename + '_gradient.am')
+    fsurf = os.path.join(pathOut, basename + '_surface.surf')
+    shapeIndex = morphome.readfile.scalar_field(fshapeindex)
+    gradient = morphome.readfile.vector_field(fgrad)
+    vertices, indices = morphome.readfile.surface(fsurf) 
+
+    coords = morphome.nucleus.find_nuclear_folds(model, vertices, indices,
+        shapeIndex, gradient)
+    print coords
 
 if __name__ == '__main__':
+    global pathOut, pathHx, binAmira
     opts, fileModel, pathOut = parse_args()
+    binAmira = '/usr/local/apps/Amira/6.0.0/bin/Amira'
+    pathHx = os.path.split(morphome.__file__)[0]
 
-    print "============"
-    print "= morphOME ="
-    print "============"
+    print_header()
 
     orgDict = {'nucleus': 'nucleus',
                'nuclei': 'nucleus',
@@ -97,4 +158,3 @@ if __name__ == '__main__':
             print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
         else:
             func(modi, basename)
-
