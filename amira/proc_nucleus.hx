@@ -72,13 +72,22 @@ $module expr1 setValue "Ay * 10000"
 $module expr2 setValue "Az * 10000"
 $module create
 
+# Convex hull
+set module "Convex Hull"
+create HxConvexHull $module
+"Convex Hull" data connect "GeometrySurface.smooth"
+"Convex Hull" action snap
+"Convex Hull" fire
+
 # Export files to disk
 set fname_gradient [file join $pathOut ${base}_gradient.am]
 set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
 set fname_surface [file join $pathOut ${base}_surface.surf]
+set fname_convhull [file join $pathOut ${base}_convhull.surf]
 
 "Result" exportData "Amira ASCII" $fname_gradient
 "ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
 "GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
+"GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
 
 exit
