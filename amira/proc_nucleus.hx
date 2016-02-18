@@ -80,3 +80,5 @@ set fname_surface [file join $pathOut ${base}_surface.surf]
 "Result" exportData "Amira ASCII" $fname_gradient
 "ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
 "GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
+
+exit
