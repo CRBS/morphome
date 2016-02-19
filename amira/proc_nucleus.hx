@@ -126,7 +126,9 @@ set vConvHull ["GeometrySurface-convexHull.statistics" getValue 3 0]
 ####
 ###
 
-# Convert the surface to a binary volume stack
+# Convert the surface to a binary volume stack. First, the dimensions of the
+# output stack need to be set. If the default dimensions aren't changed, Amira
+# will try to output a stack requiring petabytes of memory.
 set module "Scan Surface To Volume"
 create HxScanConvertSurface $module
 $module data connect "GeometrySurface.smooth"
@@ -141,22 +143,50 @@ set zmax [$module bbox getValue 5]
 set dimx [expr round((double($xmax) / $scalex - double($xmin) / $scalex))]
 set dimy [expr round((double($ymax) / $scaley - double($ymin) / $scaley))]
 set dimz [expr round((double($zmax) / $scalez - double($zmin) / $scalez))]
+$module dimensions setValues $dimx $dimy $dimz
+$module action snap
+$module fire
+"GeometrySurface.scanConverted" sharedColormap setValue "grayScale.am"
+"GeometrySurface.scanConverted" sharedColormap setMinMax 0 1
+"GeometrySurface.scanConverted" ImageData disconnect
+"GeometrySurface.scanConverted" fire
+"GeometrySurface.scanConverted" primary setIndex 0 0
+"GeometrySurface.scanConverted" fire
+"GeometrySurface.scanConverted" select
+"GeometrySurface.scanConverted" VoxelSize setValue "$scalex x $scaley x $scalez"
+
+# Label analysis
+set module "Label Analysis"
+create HxAnalyzeLabels $module
+$module data connect "GeometrySurface.scanConverted"
+$module measures setState "Nucleus" Anisotropy BaryCenterX BaryCenterY \
+    BaryCenterZ CroftonPerimeter Elongation Euler3D EqDiameter FeretShape3d \
+    Flatness Shape_VA3d OrientationPhi OrientationTheta
+$module interpretation setValue 0
+$module doIt hit 
+$module fire
 
 ###
+#####
+## DATA EXPORT
+#####
 ####
-# DATA EXPORT
-####
-###
 
-# Export files to disk for further analysis
+## Export files to disk for further analysis
 set fname_gradient [file join $pathOut ${base}_gradient.am]
 set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
 set fname_surface [file join $pathOut ${base}_surface.surf]
 set fname_convhull [file join $pathOut ${base}_convhull.surf]
+set fname_labelcsv [file join $pathOut ${base}_label.csv]
+set fname_savcsv_nuc [file join $pathOut ${base}_sav_nuc.csv]
+set fname_savcsv_ch [file join $pathOut ${base}_sav_ch.csv]
 
 "Result" exportData "Amira ASCII" $fname_gradient
 "ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
 "GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
 "GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
+"GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv
+"GeometrySurface.statistics" exportData "CSV" $fname_savcsv_nuc
+"GeometrySurface-convexHull.statistics" exportData "CSV" $fname_savcsv_ch
 
 exit
