@@ -4,6 +4,17 @@
 
 set fname "<FILENAME>"
 set pathOut "<PATH_OUT>"
+set scale [list <SCALE>]
+
+set scalex [lindex $scale 0]
+set scaley [lindex $scale 1]
+set scalez [lindex $scale 2]
+
+###
+####
+# DATA IMPORT
+####
+###
 
 # Extract the VRML file's basename
 set base [file tail $fname]
@@ -47,6 +58,12 @@ $module parameters setValue 1 0.6
 $module action snap
 $module fire
 
+###
+#####
+# NUCLEAR CURVATURE 
+#####
+###
+
 # Compute Shape Index. A curvature module is generated, and the computation 
 # method is changed to 'on vertices'. The default parameters are used.
 set module "Curvature"
@@ -72,6 +89,12 @@ $module expr1 setValue "Ay * 10000"
 $module expr2 setValue "Az * 10000"
 $module create
 
+###
+####
+# CONVEX HULL DIFFERENCE
+#### 
+###
+
 # Convex hull
 set module "Convex Hull"
 create HxConvexHull $module
@@ -79,7 +102,53 @@ create HxConvexHull $module
 "Convex Hull" action snap
 "Convex Hull" fire
 
-# Export files to disk
+# Get surface area and volume of nucleus
+set module "Surface Area Volume Nucleus"
+create HxSurfaceArea $module
+$module data connect "GeometrySurface.smooth"
+$module doIt snap
+$module doIt fire
+set saNucleus ["GeometrySurface.statistics" getValue 2 0]
+set vNucleus ["GeometrySurface.statistics" getValue 3 0]
+
+# Get surface area and volume of convex hull
+set module "Surface Area Volume Convex Hull"
+create HxSurfaceArea $module
+$module data connect "GeometrySurface-convexHull"
+$module doIt snap
+$module doIt fire
+set saConvHull ["GeometrySurface-convexHull.statistics" getValue 2 0]
+set vConvHull ["GeometrySurface-convexHull.statistics" getValue 3 0]
+
+###
+####
+# 3D BINARY IMAGE METRICS
+####
+###
+
+# Convert the surface to a binary volume stack
+set module "Scan Surface To Volume"
+create HxScanConvertSurface $module
+$module data connect "GeometrySurface.smooth"
+$module field disconnect
+$module fire
+set xmin [$moduleName bbox getValue 0]
+set xmax [$moduleName bbox getValue 1]
+set ymin [$moduleName bbox getValue 2]
+set ymax [$moduleName bbox getValue 3]
+set zmin [$moduleName bbox getValue 4]
+set zmax [$moduleName bbox getValue 5]
+set dimx [expr round((double($xmax) / $opts(scalex) - double($xmin) / $opts(scalex)))]
+set dimy [expr round((double($ymax) / $opts(scaley) - double($ymin) / $opts(scaley)))]
+set dimz [expr round((double($zmax) / $opts(scalez) - double($zmin) / $opts(scalez)))]
+
+###
+####
+# DATA EXPORT
+####
+###
+
+# Export files to disk for further analysis
 set fname_gradient [file join $pathOut ${base}_gradient.am]
 set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
 set fname_surface [file join $pathOut ${base}_surface.surf]
