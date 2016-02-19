@@ -172,6 +172,7 @@ def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
     # Create a new object in the input model that has scattered points
     # corresponding to the location of minimum gradient magnitude in each
     # positive shape index cluster.
+    nFolds = int(len(coordList) / 3)
     model.addObject()
     model.Objects[-1].setObjectType('scattered')
     model.Objects[-1].setSymbolType('circle')
@@ -180,9 +181,9 @@ def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
     model.Objects[-1].setMeshOn()
     model.Objects[-1].addContour()
     model.Objects[-1].Contours[-1].points = coordList
-    model.Objects[-1].Contours[-1].nPoints = int(len(coordList) / 3)
+    model.Objects[-1].Contours[-1].nPoints = nFolds
 
     model.Objects[-1].Views[-1].pdrawsize = 8
     model.Objects[-1].Views[-1].quality = 4
 
-    return model, saClusterSum
+    return nFolds, saClusterSum
