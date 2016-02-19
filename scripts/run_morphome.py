@@ -66,6 +66,9 @@ def print_header():
     print ""
 
 def nucleus(model, basename):
+    scale = model.getScale()
+    trans = model.getTrans()
+
     fnamewrl = os.path.join(pathOut, basename + '.wrl')
     fnamehx = os.path.join(pathOut, basename + '.hx')
 
@@ -76,13 +79,18 @@ def nucleus(model, basename):
     # all instances of <FILENAME> with the appropriate file name.
     shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_nucleus.hx'),
         fnamehx)
+
+
     regex_filename = re.compile(r"<FILENAME>")
     regex_pathout = re.compile(r"<PATH_OUT>")
+    regex_scale = re.compile(r"<SCALE>")
+    strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
     fid2 = open(fnamehx + '.new', 'w')
     with open(fnamehx, 'rw') as fid:
         for line in fid:
             line = regex_filename.sub(fnamewrl, line)
             line = regex_pathout.sub(pathOut, line)
+            line = regex_scale.sub(strScale, line)
             fid2.write(line)
     fid.close()
     fid2.close()
@@ -96,13 +104,28 @@ def nucleus(model, basename):
     fshapeindex = os.path.join(pathOut, basename + '_shapeindex.am')
     fgrad = os.path.join(pathOut, basename + '_gradient.am')
     fsurf = os.path.join(pathOut, basename + '_surface.surf')
+    fconvhull = os.path.join(pathOut, basename + '_convhull.surf')
     shapeIndex = morphome.readfile.scalar_field(fshapeindex)
     gradient = morphome.readfile.vector_field(fgrad)
-    vertices, indices = morphome.readfile.surface(fsurf) 
+    vertices, indices = morphome.readfile.surface(fsurf)
+    vch, _ = morphome.readfile.surface(fconvhull)
 
-    coords = morphome.nucleus.find_nuclear_folds(model, vertices, indices,
-        shapeIndex, gradient)
-    print coords
+    coords, sa = morphome.nucleus.quantify_nuclear_folds(model, vertices,
+        indices, shapeIndex, gradient)
+
+    # Do convex hull stuff
+    nVertsCh = vch.shape[0]
+    for i in range(nVertsCh):
+        vch[i,:] = morphome.utils.transform_coords(model, vch[i,0], vch[i,1],
+            vch[i,2])
+        vch[i,:] = [int(x) for x in vch[i,:]] 
+    vch = vch[vch[:,2].argsort()]
+
+    for i in range(nVertsCh):
+        print vch[i,:]
+
+
+    pyimod.ImodWrite(model, 'blah.mod')
 
 if __name__ == '__main__':
     global pathOut, pathHx, binAmira
