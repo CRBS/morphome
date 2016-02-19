@@ -1,8 +1,10 @@
 #!/usr/bin/env python
+
 from __future__ import division 
 import re
 import pyimod
 import numpy as np
+from .utils import transform_coords
 
 """
 Takes a vertex index, or seed, as input, then finds all triangles that
@@ -49,6 +51,11 @@ def get_cluster_area(idx, indices, vertices):
 
 """
 
+"""
+#def quantify_convex_hull(model, 
+
+"""
+Computes metrics relating to nuclear folding. 
 """
 def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
     coordList = []
@@ -135,14 +142,7 @@ def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
                 vertices[imc[2]-1,2]) / 3   
            
             # Scale back to IMOD coordinate system
-            trans = [float(x) for x in [0, 0, 0]]
-            scale = [float(x) for x in [1, 1, 1]]
-            if model.minx_set:
-                trans = model.minx_ctrans
-                scale = model.minx_cscale 
-            coordx = (coordx - trans[0]) / scale[0]
-            coordy = (coordy - trans[1]) / scale[1]
-            coordz = (coordz - trans[2]) / scale[2]
+            coordtrx = transform_coords(model, coordx, coordy, coordz)
 
             # Compute cluster surface area
             saCluster = get_cluster_area(tri_keep, indices, vertices)
@@ -161,12 +161,13 @@ def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
             print "S_mean  : {0}".format(np.mean(sCluster))
             print "S_std   : {0}".format(np.std(sCluster))
             print "Min. gradient magnitude: {0}".format(magMinCluster)
-            print "Coords: {0}, {1}, {2}".format(coordx, coordy, coordz)
+            print "Coords: {0}, {1}, {2}".format(coordtrx[0], coordtrx[1],
+                coordtrx[2])
             print ""
             
-            coordList.append(coordx)
-            coordList.append(coordy)
-            coordList.append(int(coordz))
+            coordList.append(coordtrx[0])
+            coordList.append(coordtrx[1])
+            coordList.append(int(coordtrx[2]))
 
     # Create a new object in the input model that has scattered points
     # corresponding to the location of minimum gradient magnitude in each
