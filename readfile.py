@@ -11,7 +11,7 @@ def scalar_field(fname):
     K = 0 
     with open(fname, 'r') as fid:
         for line in fid:
-            if re.match('^nNodes', line):
+            if re.match('^nNodes', line) or re.match('^nTriangles', line):
                 nVert = int(line.split()[1])
                 sField = np.zeros([nVert, 1]) 
             if re.match('^@1', line):
