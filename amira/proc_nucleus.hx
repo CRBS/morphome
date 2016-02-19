@@ -107,7 +107,7 @@ set module "Surface Area Volume Nucleus"
 create HxSurfaceArea $module
 $module data connect "GeometrySurface.smooth"
 $module doIt snap
-$module doIt fire
+$module fire
 set saNucleus ["GeometrySurface.statistics" getValue 2 0]
 set vNucleus ["GeometrySurface.statistics" getValue 3 0]
 
@@ -116,7 +116,7 @@ set module "Surface Area Volume Convex Hull"
 create HxSurfaceArea $module
 $module data connect "GeometrySurface-convexHull"
 $module doIt snap
-$module doIt fire
+$module fire
 set saConvHull ["GeometrySurface-convexHull.statistics" getValue 2 0]
 set vConvHull ["GeometrySurface-convexHull.statistics" getValue 3 0]
 
@@ -132,15 +132,15 @@ create HxScanConvertSurface $module
 $module data connect "GeometrySurface.smooth"
 $module field disconnect
 $module fire
-set xmin [$moduleName bbox getValue 0]
-set xmax [$moduleName bbox getValue 1]
-set ymin [$moduleName bbox getValue 2]
-set ymax [$moduleName bbox getValue 3]
-set zmin [$moduleName bbox getValue 4]
-set zmax [$moduleName bbox getValue 5]
-set dimx [expr round((double($xmax) / $opts(scalex) - double($xmin) / $opts(scalex)))]
-set dimy [expr round((double($ymax) / $opts(scaley) - double($ymin) / $opts(scaley)))]
-set dimz [expr round((double($zmax) / $opts(scalez) - double($zmin) / $opts(scalez)))]
+set xmin [$module bbox getValue 0]
+set xmax [$module bbox getValue 1]
+set ymin [$module bbox getValue 2]
+set ymax [$module bbox getValue 3]
+set zmin [$module bbox getValue 4]
+set zmax [$module bbox getValue 5]
+set dimx [expr round((double($xmax) / $scalex - double($xmin) / $scalex))]
+set dimy [expr round((double($ymax) / $scaley - double($ymin) / $scaley))]
+set dimz [expr round((double($zmax) / $scalez - double($zmin) / $scalez))]
 
 ###
 ####
