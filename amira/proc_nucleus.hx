@@ -11,9 +11,9 @@ set scaley [lindex $scale 1]
 set scalez [lindex $scale 2]
 
 ###
-####
+#####
 # DATA IMPORT
-####
+#####
 ###
 
 # Extract the VRML file's basename
@@ -54,13 +54,13 @@ set module "Smooth Surface"
 create HxSurfaceSmooth $module
 $module data connect "GeometrySurface.remeshed"
 $module parameters setValue 0 2
-$module parameters setValue 1 0.6
+$module parameters setValue 1 0.4
 $module action snap
 $module fire
 
 ###
 #####
-# NUCLEAR CURVATURE 
+# SHAPE INDEX & NUCLEAR FOLDING
 #####
 ###
 
@@ -90,9 +90,33 @@ $module expr2 setValue "Az * 10000"
 $module create
 
 ###
-####
+#####
+# WILLMORE ENERGY
+#####
+###
+
+# Compute mean curvature on triangle faces
+set module "Curvature 2"
+create HxGetCurvature $module
+$module data connect "GeometrySurface.smooth"
+$module method setValue 0
+$module output setValue 2
+$module doIt snap
+$module fire
+
+# Compute Gaussian curvature on triangle faces
+set module "Curvature 3"
+create HxGetCurvature $module
+$module data connect "GeometrySurface.smooth"
+$module method setValue 0
+$module output setValue 4
+$module doIt snap
+$module fire
+
+###
+#####
 # CONVEX HULL DIFFERENCE
-#### 
+##### 
 ###
 
 # Convex hull
@@ -121,9 +145,9 @@ set saConvHull ["GeometrySurface-convexHull.statistics" getValue 2 0]
 set vConvHull ["GeometrySurface-convexHull.statistics" getValue 3 0]
 
 ###
-####
+#####
 # 3D BINARY IMAGE METRICS
-####
+#####
 ###
 
 # Convert the surface to a binary volume stack. First, the dimensions of the
@@ -170,7 +194,7 @@ $module fire
 #####
 ## DATA EXPORT
 #####
-####
+###
 
 ## Export files to disk for further analysis
 set fname_gradient [file join $pathOut ${base}_gradient.am]
@@ -180,9 +204,13 @@ set fname_convhull [file join $pathOut ${base}_convhull.surf]
 set fname_labelcsv [file join $pathOut ${base}_label.csv]
 set fname_savcsv_nuc [file join $pathOut ${base}_sav_nuc.csv]
 set fname_savcsv_ch [file join $pathOut ${base}_sav_ch.csv]
+set fname_meancurv [file join $pathOut ${base}_meancurv.am]
+set fname_gausscurv [file join $pathOut ${base}_gausscurv.am]
 
 "Result" exportData "Amira ASCII" $fname_gradient
 "ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
+"MeanCurvature" exportData "Amira ASCII" $fname_meancurv
+"GaussCurvature" exportData "Amira ASCII" $fname_gausscurv
 "GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
 "GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
 "GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv

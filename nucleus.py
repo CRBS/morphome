@@ -1,17 +1,16 @@
-#!/usr/bin/env python
-
 from __future__ import division 
 import re
 import pyimod
 import numpy as np
-from .utils import transform_coords
+from .utils import transform_coords, is_outlier
+from .readfile import scalar_field, surface
 
-"""
-Takes a vertex index, or seed, as input, then finds all triangles that
-contain this seed vertex. The vertex indices of all these neighboring
-triangles are then returned. 
-"""
 def get_adjacent_vertices(seed, indices):
+    """
+    Takes a vertex index, or seed, as input, then finds all triangles that
+    contain this seed vertex. The vertex indices of all these neighboring
+    triangles are then returned. 
+    """
     # Find all triangles that contain the seed vertex
     tris_with_seed = np.where(indices == seed)[0]
 
@@ -22,12 +21,12 @@ def get_adjacent_vertices(seed, indices):
     idx = np.unique(idx).tolist()
     idx = [int(x) for x in idx]
     idx.remove(seed)
-    return idx
+    return idx, tris_with_seed
 
-"""
-Computes the area of a triangle from three arbitrary 3D points
-"""
 def get_triangle_area(a, b, c):
+    """
+    Computes the area of a triangle from three arbitrary 3D points.
+    """
     ab = b - a 
     ac = c - a 
     ab_norm = np.linalg.norm(ab)
@@ -36,10 +35,10 @@ def get_triangle_area(a, b, c):
     A = 0.5 * ab_norm * ac_norm * np.sin(theta)
     return A
 
-"""
-Computes the surface area of a given list of triangles.
-"""
 def get_cluster_area(idx, indices, vertices):
+    """
+    Computes the surface area of a given list of triangles.
+    """
     Acluster = 0
     for i in idx:
         vert1 = vertices[indices[i][0] - 1,:]
@@ -49,15 +48,94 @@ def get_cluster_area(idx, indices, vertices):
         Acluster += Ai
     return Acluster
 
-"""
+def willmore_energy(fname_mean, fname_gauss, fname_surf):
+    """
+    Computes the Willmore energy of a surface. The Willmore energy is a unit-
+    less measure of how much a given surface deviates from a perfect sphere. 
+    The Willmore energy of a perfect sphere is zero.
+    (https://en.wikipedia.org/wiki/Willmore_energy)
+    """
+    # Import data from Amira files
+    meanCurv = scalar_field(fname_mean)
+    gaussCurv = scalar_field(fname_gauss)
+    vertices, indices = surface(fname_surf)
 
-"""
-#def quantify_convex_hull(model, 
+    # Check the Mean curvature and Gaussian curvature scalar fields for extreme
+    # outliers, i.e. values for which the z-score is > 100.
+    meanCurvOutl = is_outlier(meanCurv, thresh = 100)
+    meanCurvOutl = [i for i, x in enumerate(meanCurvOutl) if x]
+    gaussCurvOutl = is_outlier(gaussCurv, thresh = 100)
+    gaussCurvOutl = [i for i, x in enumerate(gaussCurvOutl) if x]
 
-"""
-Computes metrics relating to nuclear folding. 
-"""
+    # Get mean values of Mean and Gaussian Curvature
+    meanCurvMean = np.mean(meanCurv)
+    gaussCurvMean = np.mean(gaussCurv)
+
+    # Compute the integrals
+    nTri = indices.shape[0]
+    integral_mean = 0 
+    integral_gauss = 0 
+    for i in range(nTri):
+        # Get the area of the corresponding triangle
+        idx = indices[i,:]
+        vert1 = vertices[idx[0] - 1,:]
+        vert2 = vertices[idx[1] - 1,:]
+        vert3 = vertices[idx[2] - 1,:]
+        area = get_triangle_area(vert1, vert2, vert3)
+
+        # Compute the mean curvature product for the i-th triangle. First, check
+        # if the value for the i-th triangle is an outlier. If so, replace it
+        # with the average value of all surrounding triangles.
+        if i in meanCurvOutl:
+            _, tris1 = get_adjacent_vertices(idx[0], indices)
+            _, tris2 = get_adjacent_vertices(idx[1], indices)
+            _, tris3 = get_adjacent_vertices(idx[2], indices)
+
+            tris = np.concatenate([tris1, tris2, tris3])
+            tris = np.unique(tris).tolist()
+            tris.remove(i)
+            for j in range(len(tris)-1, -1, -1):
+                if tris[j] in meanCurvOutl:
+                    tris.remove(tris[j])
+            vals = [meanCurv[x] for x in tris]
+            
+            # If ALL surrounding triangles are outliers, replace the triangle's
+            # mean curvature with the mean of the whole surface.
+            if not vals: 
+                meanCurv[i] = meanCurvMean
+            else:
+                meanCurv[i] = np.mean(vals)
+        integral_mean += (meanCurv[i] ** 2) * area
+
+        # Do the same with the Gaussian curvature
+        if i in gaussCurvOutl:
+            _, tris1 = get_adjacent_vertices(idx[0], indices)
+            _, tris2 = get_adjacent_vertices(idx[1], indices)
+            _, tris3 = get_adjacent_vertices(idx[2], indices)
+
+            tris = np.concatenate([tris1, tris2, tris3])
+            tris = np.unique(tris).tolist()
+            tris.remove(i)
+            for j in range(len(tris)-1, -1, -1):
+                if tris[j] in gaussCurvOutl:
+                    tris.remove(tris[j])
+            vals = [gaussCurv[x] for x in tris]
+
+            # If ALL surrounding triangles are outliers, replace the triangle's
+            # Gaussian curvature with the mean of the whole surface.
+            if not vals:
+                gaussCurv[i] = gaussCurvMean
+            else:
+                gaussCurv[i] = np.mean(vals)
+        integral_gauss += gaussCurv[i] * area
+       
+    willmore_energy = integral_mean - integral_gauss
+    return willmore_energy[0]
+
 def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
+    """
+    Computes metrics relating to nuclear folding.
+    """
     coordList = []
     nTri = indices.shape[0]
     nVert = vertices.shape[0]
@@ -69,15 +147,14 @@ def quantify_nuclear_folds(model, vertices, indices, shapeIndex, grad):
 
     nCluster = 0
     saClusterSum = 0
-    while vert_idx_pos:
-        # Set the seed vertex as the first entry
+    while vert_idx_pos: # Set the seed vertex as the first entry
         vert_seed = vert_idx_pos[0]
         vert_check = [vert_seed]
         vert_keep = []
 
         while vert_check:
             # Find all vertices in triangles adjacent to the seed vertex
-            vert_adj = get_adjacent_vertices(vert_check[0], indices)
+            vert_adj, _ = get_adjacent_vertices(vert_check[0], indices)
             vert_keep.append(vert_check[0])
 
             # If none of the adjacent vertices have a positive Shape Index,

@@ -85,3 +85,18 @@ def surface(fname):
                 C = 0
                 continue
         return vertices, indices
+
+"""
+Reads data from a CSV file output by Amira's 'Label Analysis' module. Data
+are returned as a list.
+"""
+def label_csv(fname):
+    fid = open(fname, 'r')
+    for i, line in enumerate(fid):
+       if i == 2:
+           metrics = line
+           break
+    metricList = line.split(',')
+    metricList = metricList[0:-2]
+    metricList = [float(x) for x in metricList]
+    return metricList
