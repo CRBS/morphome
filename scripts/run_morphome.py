@@ -69,6 +69,32 @@ def mitochondrion(model, basename):
     scale = model.getScale()
     trans = model.getTrans()
 
+    fnamewrl = os.path.join(pathOut, basename + '.wrl')
+    fnamehx = os.path.join(pathOut, basename + '.hx')
+
+    # Run mitochondrion pre-processing
+    morphome.preprocess.mitochondrion(model, fnamewrl)
+
+    shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_mitochondrion.hx'),
+        fnamehx)
+    regex_filename = re.compile(r"<FILENAME>")
+    regex_pathout = re.compile(r"<PATH_OUT>")
+    regex_scale = re.compile(r"<SCALE>")
+    strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
+    fid2 = open(fnamehx + '.new', 'w')
+    with open(fnamehx, 'rw') as fid:
+        for line in fid:
+            line = regex_filename.sub(fnamewrl, line)
+            line = regex_pathout.sub(pathOut, line)
+            line = regex_scale.sub(strScale, line)
+            fid2.write(line)
+    fid.close()
+    fid2.close()
+    shutil.move(fnamehx + '.new', fnamehx)
+
+    # Run the script in Amira
+    cmd = '{0} {1}'.format(binAmira, fnamehx)
+    subprocess.call(cmd.split())
 
 def nucleus(model, basename):
     scale = model.getScale()
@@ -84,7 +110,6 @@ def nucleus(model, basename):
     # all instances of <FILENAME> with the appropriate file name.
     shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_nucleus.hx'),
         fnamehx)
-
 
     regex_filename = re.compile(r"<FILENAME>")
     regex_pathout = re.compile(r"<PATH_OUT>")
