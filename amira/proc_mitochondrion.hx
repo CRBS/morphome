@@ -102,11 +102,34 @@ $module fire
 set module "Label Analysis"
 create HxAnalyzeLabels $module
 $module data connect "GeometrySurface.scanConverted"
-$module measures setState "Nucleus" Anisotropy BaryCenterX BaryCenterY \
+$module measures setState "Mitochondrion" Anisotropy BaryCenterX BaryCenterY \
     BaryCenterZ CroftonPerimeter Elongation Euler3D EqDiameter FeretShape3d \
     Flatness Shape_VA3d OrientationPhi OrientationTheta
 $module interpretation setValue 0
 $module doIt hit 
+$module fire
+
+###
+#####
+# 3D SKELETONIZATION VIA TEASAR ALGORITHM
+#####
+###
+
+# Compute skeleton
+set module "Centerline Tree"
+create HxTEASAR $module
+$module data connect "GeometrySurface.scanConverted"
+$module doIt snap
+$module fire
+
+# Smooth the skeleton
+set module "Smooth Tree"
+create HxSmoothLine $module
+$module lineSet connect "GeometrySurface.spatialgraph"
+$module coefficients setValue 0 $smooth
+$module coefficients setValue 1 $attach
+$module numberOfIterations setValue $iter
+$module doIt snap
 $module fire
 
 ###
@@ -116,24 +139,24 @@ $module fire
 ###
 
 ## Export files to disk for further analysis
-set fname_gradient [file join $pathOut ${base}_gradient.am]
-set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
-set fname_surface [file join $pathOut ${base}_surface.surf]
-set fname_convhull [file join $pathOut ${base}_convhull.surf]
-set fname_labelcsv [file join $pathOut ${base}_label.csv]
-set fname_savcsv_nuc [file join $pathOut ${base}_sav_nuc.csv]
-set fname_savcsv_ch [file join $pathOut ${base}_sav_ch.csv]
-set fname_meancurv [file join $pathOut ${base}_meancurv.am]
-set fname_gausscurv [file join $pathOut ${base}_gausscurv.am]
-
-"Result" exportData "Amira ASCII" $fname_gradient
-"ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
-"MeanCurvature" exportData "Amira ASCII" $fname_meancurv
-"GaussCurvature" exportData "Amira ASCII" $fname_gausscurv
-"GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
-"GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
-"GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv
-"GeometrySurface.statistics" exportData "CSV" $fname_savcsv_nuc
-"GeometrySurface-convexHull.statistics" exportData "CSV" $fname_savcsv_ch
-
-exit
+#set fname_gradient [file join $pathOut ${base}_gradient.am]
+#set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
+#set fname_surface [file join $pathOut ${base}_surface.surf]
+#set fname_convhull [file join $pathOut ${base}_convhull.surf]
+#set fname_labelcsv [file join $pathOut ${base}_label.csv]
+#set fname_savcsv_nuc [file join $pathOut ${base}_sav_nuc.csv]
+#set fname_savcsv_ch [file join $pathOut ${base}_sav_ch.csv]
+#set fname_meancurv [file join $pathOut ${base}_meancurv.am]
+#set fname_gausscurv [file join $pathOut ${base}_gausscurv.am]
+#
+#"Result" exportData "Amira ASCII" $fname_gradient
+#"ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
+#"MeanCurvature" exportData "Amira ASCII" $fname_meancurv
+#"GaussCurvature" exportData "Amira ASCII" $fname_gausscurv
+#"GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
+#"GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
+#"GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv
+#"GeometrySurface.statistics" exportData "CSV" $fname_savcsv_nuc
+#"GeometrySurface-convexHull.statistics" exportData "CSV" $fname_savcsv_ch
+#
+#exit
