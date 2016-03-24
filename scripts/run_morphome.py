@@ -65,6 +65,11 @@ def print_header():
     print "                 {0} {1}".format(date, time)
     print ""
 
+def mitochondrion(model, basename):
+    scale = model.getScale()
+    trans = model.getTrans()
+
+
 def nucleus(model, basename):
     scale = model.getScale()
     trans = model.getTrans()
@@ -124,7 +129,6 @@ def nucleus(model, basename):
     for i in range(nVertsCh):
         print vch[i,:]
 
-
     pyimod.ImodWrite(model, 'blah.mod')
 
 if __name__ == '__main__':
@@ -137,7 +141,9 @@ if __name__ == '__main__':
 
     orgDict = {'nucleus': 'nucleus',
                'nuclei': 'nucleus',
-               'nuc': 'nucleus'}
+               'mitochondrion': 'mitochondrion',
+               'mitochondria': 'mitochondrion',
+               'mito': 'mitochondrion'}
 
     # Load model file and print info
     print "Loading model file: {0}".format(fileModel)
