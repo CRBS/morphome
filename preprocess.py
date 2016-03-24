@@ -20,7 +20,7 @@ def general_prep(fnamein):
 
     return mod   
 
-def mitochondrion(fnamein, fnameout)
+def mitochondrion(fnamein, fnameout):
     mod = general_prep(fnamein)
     # Perform initial smoothing of the surface using IMOD. Done in 2 steps:
     #    1. Smooth the contours in 3D
