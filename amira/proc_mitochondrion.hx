@@ -125,10 +125,10 @@ $module fire
 # Smooth the skeleton
 set module "Smooth Tree"
 create HxSmoothLine $module
-$module lineSet connect "GeometrySurface.spatialgraph"
-$module coefficients setValue 0 $smooth
-$module coefficients setValue 1 $attach
-$module numberOfIterations setValue $iter
+$module lineSet connect "GeometrySurface.Spatial-Graph"
+$module coefficients setValue 0 0.7
+$module coefficients setValue 1 0.2
+$module numberOfIterations setValue 10
 $module doIt snap
 $module fire
 
