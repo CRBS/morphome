@@ -10,6 +10,7 @@
 
 set fname "<FILENAME>"
 set pathOut "<PATH_OUT>"
+set displayOn 1
 set scale [list <SCALE>]
 
 set scalex [lindex $scale 0]
@@ -36,6 +37,12 @@ $module data connect $base
 $module action snap
 $module fire
 
+###
+#####
+# REMESHING & SMOOTHING
+#####
+###
+
 # Remesh the surface. The surface is remeshed using the best isotropic vertex
 # placement and the same number of output triangles.
 set module "Remesh Surface"
@@ -61,6 +68,19 @@ $module data connect "GeometrySurface.remeshed"
 $module parameters setValue 0 10
 $module parameters setValue 1 0.6
 $module action snap
+$module fire
+
+###
+#####
+# VOLUME & SURFACE AREA
+#####
+###
+
+# Get surface area and volume of the mito
+set module "Surface Area Volume Mito"
+create HxSurfaceArea $module
+$module data connect "GeometrySurface.smooth"
+$module doIt snap
 $module fire
 
 ###
@@ -111,7 +131,7 @@ $module fire
 
 ###
 #####
-# 3D SKELETONIZATION VIA TEASAR ALGORITHM
+# BRANCH ANALYSIS VIA TEASAR SKELETONIZATION ALGORITHM
 #####
 ###
 
@@ -132,31 +152,64 @@ $module numberOfIterations setValue 10
 $module doIt snap
 $module fire
 
+# Get branch length statistics
+set module "Spatial Graph Statistics"
+create HxSpatialGraphStats $module
+$module data connect "SmoothTree.spatialgraph"
+$module doIt snap
+$module fire
+
 ###
 #####
 ## DATA EXPORT
 #####
 ###
 
-## Export files to disk for further analysis
-#set fname_gradient [file join $pathOut ${base}_gradient.am]
-#set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
-#set fname_surface [file join $pathOut ${base}_surface.surf]
-#set fname_convhull [file join $pathOut ${base}_convhull.surf]
-#set fname_labelcsv [file join $pathOut ${base}_label.csv]
-#set fname_savcsv_nuc [file join $pathOut ${base}_sav_nuc.csv]
-#set fname_savcsv_ch [file join $pathOut ${base}_sav_ch.csv]
-#set fname_meancurv [file join $pathOut ${base}_meancurv.am]
-#set fname_gausscurv [file join $pathOut ${base}_gausscurv.am]
-#
-#"Result" exportData "Amira ASCII" $fname_gradient
-#"ShapeIndex" exportData "Amira ASCII" $fname_shapeindex
-#"MeanCurvature" exportData "Amira ASCII" $fname_meancurv
-#"GaussCurvature" exportData "Amira ASCII" $fname_gausscurv
-#"GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
-#"GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
-#"GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv
-#"GeometrySurface.statistics" exportData "CSV" $fname_savcsv_nuc
-#"GeometrySurface-convexHull.statistics" exportData "CSV" $fname_savcsv_ch
-#
+# Export files to disk for further analysis
+set fname_savcsv [file join $pathOut ${base}_sav.csv]
+set fname_labelcsv [file join $pathOut ${base}_label.csv]
+set fname_lengthcsv [file join $pathOut ${base}_length.csv]
+set fname_nodes [file join $pathOut ${base}_nodes.am]
+
+"GeometrySurface.statistics" exportData "CSV" $fname_savcsv
+"GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv
+"SmoothTree.statistics" exportData "CSV" $fname_lengthcsv
+"SmoothTree.spatialgraph" exportData "AmiraMesh ascii SpatialGraph" $fname_nodes
+
+###
+#####
+## DISPLAY
+#####
+##
+
+if {$displayOn} {
+    # Set up display of the surface
+    set module "Surface View"
+    create HxDisplaySurface $module
+    $module data connect "GeometrySurface.smooth"
+    $module drawStyle setValue 4
+    $module drawStyle setNormalBinding 1
+    $module colorMode setValue 5
+    $module colormap setDefaultColor 0 1 0
+    $module baseTrans setValue 0.8
+    $module fire
+
+    # Set up display of the skeleton
+    set module "Spatial Graph View"
+    create HxSpatialGraphView $module
+    $module data connect "SmoothTree.spatialgraph"
+    $module nodeScaleFactor setMinMax 0 $scalex
+    $module nodeScaleFactor setValue $scalex
+    $module nodeColor setColor 0 1 0 0 
+    $module segmentWidth setMinMax 0 5
+    $module segmentWidth setValue 5
+    $module fire
+
+    # Create camera path, rotating once around the object
+    set module "Camera-Orbit"
+    create HxCircularCameraPath $module
+    $module action setState menus 1 4
+    $module fire
+}
+
 #exit
