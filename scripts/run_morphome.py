@@ -14,6 +14,12 @@ from optparse import OptionParser
 def parse_args():
     global p
     p = OptionParser(usage = "%prog [options] file.mod /path/for/output")
+    p.add_option("--writeTilesMitochondrion",
+                 action = "store_true",
+                 default = False,
+                 dest = "writeTilesMitochondrion",
+                 help = "Toggles on writing of tiled animations for individual"
+                        "mitochondria.")
     (opts, args) = p.parse_args()
     fileModel, pathOut = check_args(args)
     return opts, fileModel, pathOut
@@ -80,6 +86,7 @@ def mitochondrion(model, basename):
     regex_filename = re.compile(r"<FILENAME>")
     regex_pathout = re.compile(r"<PATH_OUT>")
     regex_scale = re.compile(r"<SCALE>")
+    regex_display = re.compile(r"<DISPLAY>")
     strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
     fid2 = open(fnamehx + '.new', 'w')
     with open(fnamehx, 'rw') as fid:
@@ -87,14 +94,21 @@ def mitochondrion(model, basename):
             line = regex_filename.sub(fnamewrl, line)
             line = regex_pathout.sub(pathOut, line)
             line = regex_scale.sub(strScale, line)
+            line = regex_display.sub(str(int(opts.writeTilesMitochondrion)), line)
             fid2.write(line)
     fid.close()
     fid2.close()
     shutil.move(fnamehx + '.new', fnamehx)
 
     # Run the script in Amira
-    cmd = '{0} {1}'.format(binAmira, fnamehx)
+    if opts.writeTilesMitochondrion:
+        cmd = '{0} {1}'.format(binAmira, fnamehx)
+    else:
+        cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
     subprocess.call(cmd.split())
+
+    flength = os.path.join(pathOut, basename + '_length.csv')
+    morphome.readfile.skel_length(flength)
 
 def nucleus(model, basename):
     scale = model.getScale()
@@ -157,7 +171,7 @@ def nucleus(model, basename):
     pyimod.ImodWrite(model, 'blah.mod')
 
 if __name__ == '__main__':
-    global pathOut, pathHx, binAmira
+    global opts, pathOut, pathHx, binAmira
     opts, fileModel, pathOut = parse_args()
     binAmira = '/usr/local/apps/Amira/6.0.0/bin/Amira'
     pathHx = os.path.split(morphome.__file__)[0]
