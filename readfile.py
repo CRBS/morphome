@@ -3,10 +3,10 @@ from __future__ import division
 import numpy as np
 import re
 
-"""
-Reads an Amira Mesh ASCII file of scalar field values to a Numpy array
-"""
 def scalar_field(fname):
+    """
+    Reads an Amira Mesh ASCII file of scalar field values to a Numpy array
+    """
     C = 0 
     K = 0 
     with open(fname, 'r') as fid:
@@ -22,10 +22,10 @@ def scalar_field(fname):
                 K+=1
     return sField
 
-"""
-Reads an Amira Mesh ASCII file of vector field directions to a Numpy array
-"""
 def vector_field(fname):
+    """
+    Reads an Amira Mesh ASCII file of vector field directions to a Numpy array
+    """
     C = 0
     K = 0
     with open(fname, 'r') as fid:
@@ -42,11 +42,12 @@ def vector_field(fname):
                 K+=1
     return vField
 
-"""
-Read an HxSurface ASCII file, which describes (1) the mesh vertices and
-(2) the vertex indices corresponding to all mesh triangles.
-"""
 def surface(fname):
+    """
+    Read an HxSurface ASCII file, which describes (1) the mesh vertices and
+    (2) the vertex indices corresponding to all mesh triangles.
+    """
+
     C = 0
     with open(fname, 'r') as fid:
         for line in fid: 
@@ -86,11 +87,11 @@ def surface(fname):
                 continue
         return vertices, indices
 
-"""
-Reads data from a CSV file output by Amira's 'Label Analysis' module. Data
-are returned as a list.
-"""
 def label_csv(fname):
+    """
+    Reads data from a CSV file output by Amira's 'Label Analysis' module. Data
+    are returned as a list.
+    """
     fid = open(fname, 'r')
     for i, line in enumerate(fid):
        if i == 2:
@@ -100,3 +101,30 @@ def label_csv(fname):
     metricList = metricList[0:-2]
     metricList = [float(x) for x in metricList]
     return metricList
+
+def skel_length(fname):
+    """
+    Reads data from a CSV file output by Amira's spatial graph module.
+    """
+    with open(fname, 'r') as fid:
+        for line in fid:
+            if 'Graph Summary' in line:
+                fid.next()
+                vals = fid.next().split(',')
+                nSegments = int(vals[1])
+                lengthTot = float(vals[5])
+                segments = np.zeros([nSegments, 4])
+            elif 'Segment Statistics' in line:
+                fid.next()
+                for i in range(nSegments):
+                    vals = fid.next().split(',')
+                    segments[i,0] = float(vals[1])
+                    segments[i,1] = float(vals[2])
+                    segments[i,2] = float(vals[4])
+                    segments[i,3] = float(vals[5])
+            elif 'Node Statistics' in line:
+                fid.next()
+                nodes = [int(x) for x in fid.next().split(',')]
+    print nSegments, lengthTot
+    print segments
+    print nodes
