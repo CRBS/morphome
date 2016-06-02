@@ -126,6 +126,12 @@ def skel_length(fname):
             elif 'Node Statistics' in line:
                 fid.next()
                 nodes = [int(x) for x in fid.next().split(',')]
+
+    # Convert to microns
+    lengthTot = lengthTot / 10000
+    segments[...,0] = segments[...,0] / 10000
+    segments[...,1] = segments[...,1] / 10000
+
     return nSegments, lengthTot, segments, nodes
 
 def sav(fname):
