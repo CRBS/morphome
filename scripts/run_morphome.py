@@ -120,6 +120,10 @@ def mitochondrion(model, basename, filename):
     savratio, sphericity = morphome.utils.compute_sav_metrics(sa, volume)
     label_metrics = morphome.readfile.label_csv(flabel)
 
+    # Convert metrics to microns as necessary
+    for i in 1,2,3,4,7:
+        label_metrics[i] = label_metrics[i] / 10000
+
     # Create final CSV file containing all computed metrics
     metrics = [sa, volume, savratio, sphericity] 
     metrics.extend(label_metrics)
@@ -283,8 +287,7 @@ def build_header_mitochondrion(filesIn):
             '\"Branch {0} Orientation (theta)\",' \
             '\"Branch {0} Orientation (phi)\"'.format(i+1)
         headerStr += headeri
-
-    print headerStr
+    return headerStr
 
 if __name__ == '__main__':
     global opts, pathOut, pathHx, binAmira, orgDict
@@ -334,6 +337,8 @@ if __name__ == '__main__':
         try:
             func = globals()['build_header_' + wname]
         except KeyError, e:
-            print "WARNING: No function for {0} workflow. Skipping the object.".format(wname)
+            print "WARNING: No function for {0} workflow. Skipping.".format(wname)
+            break
         else:
-            func(filesIn)
+            headerStr = func(filesIn)
+            print headerStr 
