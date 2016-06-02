@@ -280,4 +280,4 @@ if {$displayOn} {
     echo $pathOut
 }
 
-#exit
+exit
