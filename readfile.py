@@ -2,6 +2,7 @@
 from __future__ import division 
 import numpy as np
 import re
+import math
 
 def scalar_field(fname):
     """
@@ -128,3 +129,20 @@ def skel_length(fname):
     print nSegments, lengthTot
     print segments
     print nodes
+
+def sav(fname):
+    """
+    Reads data from a CSV file output by Amira's Surface Area module. Returns
+    volume and surface area.
+    """
+    with open(fname, 'r') as fid:
+        for line in fid:
+            if 'Exterior' in line:
+                line = line.split(',')
+                sa = line 
+                sa = math.fabs(int(line[2]))
+                volume = math.fabs(int(line[3]))
+                break
+    sa = sa / (10000 ** 2)
+    volume = volume / (10000 ** 3)
+    return sa, volume
