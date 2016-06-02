@@ -3,6 +3,7 @@
 import sys
 import os
 import re
+import glob
 import shutil
 import subprocess
 import datetime
@@ -18,7 +19,7 @@ def parse_args():
                  action = "store_true",
                  default = False,
                  dest = "writeTilesMitochondrion",
-                 help = "Toggles on writing of tiled animations for individual"
+                 help = "Toggles on writing of tiled animations for individual "
                         "mitochondria.")
     (opts, args) = p.parse_args()
     fileModel, pathOut = check_args(args)
@@ -30,8 +31,8 @@ def check_args(args):
     fileModel = args[0]
     pathOut = args[1]
 
-    if not os.path.isfile(fileModel):
-        usage("{0} is not a valid file".format(fileModel))
+    if not os.path.isfile(fileModel) and not os.path.isdir(fileModel):
+        usage("{0} does not exist".format(fileModel))
 
     pathsplit, dirsplit = os.path.split(pathOut)
     if not pathsplit:
@@ -170,59 +171,86 @@ def nucleus(model, basename):
 
     pyimod.ImodWrite(model, 'blah.mod')
 
+def process_object(model, i):
+    """
+    For an input model and object number, extracts the object to a new pyimod
+    ImodModel class instance, determines the object name, and executes the
+    appropriate workflow. If the object name is not part of the organelle
+    dictionary, print a warning message and exit.   
+    """
+    namei = model.Objects[i].name
+    print "Object {0}".format(i+1)
+    print "============"
+    print "Name: {0}".format(namei)
+    print "# Contours: {0}".format(model.Objects[i].nContours)
+
+    # If the current object name is empty, print a warning and skip it
+    if not namei:
+        print "WARNING: No object name provided. Skipping the object."
+        return
+
+    # Check if the current object name is supported. If it is not, print a
+    # warning and skip it. If it is, run the desired workflow.
+    if orgDict.has_key(namei.lower()):
+        workflow = orgDict[namei.lower()]
+    else:
+        print "WARNING: No existing workflow for object name {0}".format(
+            namei)
+        return
+    print "Running morphome workflow: {0}()".format(workflow)
+
+    # Extract the object to a new, temporary model file
+    modi = pyimod.ImodCmd(model, 'imodextract {0}'.format(i+1))
+
+    # Construct basename to consist of the object name followed by the 
+    # workflow/organelle name.
+    basename = 'obj_' + str(i+1).zfill(4) + '_' + workflow
+
+    # Run the corresponding function for the desired organelle workflow.
+    try:
+        func = globals()[workflow]
+    except KeyError, e:
+        print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
+    else:
+        func(modi, basename)
+
 if __name__ == '__main__':
-    global opts, pathOut, pathHx, binAmira
+    global opts, pathOut, pathHx, binAmira, orgDict
     opts, fileModel, pathOut = parse_args()
+
+    # Set path for Amira 6.0 on NCMIR machines
     binAmira = '/usr/local/apps/Amira/6.0.0/bin/Amira'
     pathHx = os.path.split(morphome.__file__)[0]
 
+    # Print morphome header
     print_header()
 
+    # Set dictionary to support singular/plural versions of organelle names
+    # as well as a variety of common spellings.
     orgDict = {'nucleus': 'nucleus',
                'nuclei': 'nucleus',
                'mitochondrion': 'mitochondrion',
                'mitochondria': 'mitochondrion',
                'mito': 'mitochondrion'}
 
-    # Load model file and print info
-    print "Loading model file: {0}".format(fileModel)
-    origModel = pyimod.ImodModel(fileModel)
-    nObj = origModel.nObjects
-    print "# Objects: {0}".format(nObj)
-    print ""
+    # If the first supplied argument is a directory, parse the directory for
+    # model files with the .mod extension. If it is a file, assume it is a
+    # valid IMOD model file and process just this one file.
+    if os.path.isdir(fileModel):
+        filesIn = sorted(glob.glob(os.path.join(fileModel, '*.mod')))
+    else:
+        filesIn = [fileModel]
 
-    # Loop over all objects
-    for i in range(nObj):
-        namei = origModel.Objects[i].name
-        print "Object {0}".format(i+1)
-        print "============"
-        print "Name: {0}".format(namei)
-        print "# Contours: {0}".format(origModel.Objects[i].nContours)
-
-        # If the current object name is empty, print a warning and skip it
-        if not namei:
-            print "WARNING: No object name provided. Skipping the object."
-            continue
-
-        # Check if the current object name is supported. If it is not, print a
-        # warning and skip it. If it is, run the desired workflow.
-        if orgDict.has_key(namei.lower()):
-            workflow = orgDict[namei.lower()]
-        else:
-            print "WARNING: No existing workflow for object name {0}".format(namei)
-            continue
-        print "Running morphome workflow: {0}()".format(workflow)
-
-        # Extract the object to a new model file
-        modi = pyimod.ImodCmd(origModel, 'imodextract {0}'.format(i+1))
-
-        # Construct basename
-        basename = 'obj_' + str(i+1).zfill(4) + '_' + workflow
-
-        # Run the corresponding function for the desired organelle workflow.
-        try:
-            func = globals()[workflow]
-        except KeyError, e:
-            print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
-        else:
-            func(modi, basename)
+    print filesIn
+    
+    # Loop over each model file.
+    for fname in filesIn:
+        print "Loading model file: {0}".format(fname)
+        origModel = pyimod.ImodModel(fname)
+        nObj = origModel.nObjects
+        print "# Objects: {0}".format(nObj)
+        print ""
+        
+        # Loop over each object and execute the appropriate workflow
+        for iObj in range(nObj): 
+            process_object(origModel, iObj)
