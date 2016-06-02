@@ -126,9 +126,7 @@ def skel_length(fname):
             elif 'Node Statistics' in line:
                 fid.next()
                 nodes = [int(x) for x in fid.next().split(',')]
-    print nSegments, lengthTot
-    print segments
-    print nodes
+    return nSegments, lengthTot, segments, nodes
 
 def sav(fname):
     """
