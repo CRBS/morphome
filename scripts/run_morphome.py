@@ -72,12 +72,14 @@ def print_header():
     print "                 {0} {1}".format(date, time)
     print ""
 
-def mitochondrion(model, basename):
+def mitochondrion(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
+ 
+    pathouti = os.path.join(pathOut, filename, basename)
 
-    fnamewrl = os.path.join(pathOut, basename + '.wrl')
-    fnamehx = os.path.join(pathOut, basename + '.hx')
+    fnamewrl = os.path.join(pathouti, basename + '.wrl')
+    fnamehx = os.path.join(pathouti, basename + '.hx')
 
     # Run mitochondrion pre-processing
     morphome.preprocess.mitochondrion(model, fnamewrl)
@@ -93,7 +95,7 @@ def mitochondrion(model, basename):
     with open(fnamehx, 'rw') as fid:
         for line in fid:
             line = regex_filename.sub(fnamewrl, line)
-            line = regex_pathout.sub(pathOut, line)
+            line = regex_pathout.sub(pathouti, line)
             line = regex_scale.sub(strScale, line)
             line = regex_display.sub(str(int(opts.writeTilesMitochondrion)), line)
             fid2.write(line)
@@ -108,15 +110,33 @@ def mitochondrion(model, basename):
         cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
     subprocess.call(cmd.split())
 
-    flength = os.path.join(pathOut, basename + '_length.csv')
-    morphome.readfile.skel_length(flength)
+    # Process output files 
+    flength = os.path.join(pathouti, basename + '_length.csv')
+    fsav = os.path.join(pathouti, basename + '_sav.csv')
+    flabel = os.path.join(pathouti, basename + '_label.csv')
+    nSegments, lengthTot, segments, nodes = morphome.readfile.skel_length(
+        flength)
+    sa, volume = morphome.readfile.sav(fsav)
+    savratio, sphericity = morphome.utils.compute_sav_metrics(sa, volume)
+    label_metrics = morphome.readfile.label_csv(flabel)
 
-def nucleus(model, basename):
+    # Create final CSV file containing all computed metrics
+    metrics = [sa, volume, savratio, sphericity] 
+    metrics.extend(label_metrics)
+    metrics.extend([nSegments, lengthTot])
+    metrics.extend(nodes)
+    for i in range(nSegments):
+        metrics.extend(segments[i,...])
+    print metrics
+
+def nucleus(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
 
-    fnamewrl = os.path.join(pathOut, basename + '.wrl')
-    fnamehx = os.path.join(pathOut, basename + '.hx')
+    pathouti = os.path.join(pathOut, filename, basename)
+
+    fnamewrl = os.path.join(pathouti, basename + '.wrl')
+    fnamehx = os.path.join(pathouti, basename + '.hx')
 
     # Run nucleus pre-processing
     morphome.preprocess.nucleus(model, fnamewrl)
@@ -134,7 +154,7 @@ def nucleus(model, basename):
     with open(fnamehx, 'rw') as fid:
         for line in fid:
             line = regex_filename.sub(fnamewrl, line)
-            line = regex_pathout.sub(pathOut, line)
+            line = regex_pathout.sub(pathouti, line)
             line = regex_scale.sub(strScale, line)
             fid2.write(line)
     fid.close()
@@ -146,10 +166,10 @@ def nucleus(model, basename):
     subprocess.call(cmd.split())
 
     # Find nuclear envelope folds
-    fshapeindex = os.path.join(pathOut, basename + '_shapeindex.am')
-    fgrad = os.path.join(pathOut, basename + '_gradient.am')
-    fsurf = os.path.join(pathOut, basename + '_surface.surf')
-    fconvhull = os.path.join(pathOut, basename + '_convhull.surf')
+    fshapeindex = os.path.join(pathouti, basename + '_shapeindex.am')
+    fgrad = os.path.join(pathouti, basename + '_gradient.am')
+    fsurf = os.path.join(pathouti, basename + '_surface.surf')
+    fconvhull = os.path.join(pathouti, basename + '_convhull.surf')
     shapeIndex = morphome.readfile.scalar_field(fshapeindex)
     gradient = morphome.readfile.vector_field(fgrad)
     vertices, indices = morphome.readfile.surface(fsurf)
@@ -171,7 +191,7 @@ def nucleus(model, basename):
 
     pyimod.ImodWrite(model, 'blah.mod')
 
-def process_object(model, i):
+def process_object(model, i, filename):
     """
     For an input model and object number, extracts the object to a new pyimod
     ImodModel class instance, determines the object name, and executes the
@@ -187,7 +207,7 @@ def process_object(model, i):
     # If the current object name is empty, print a warning and skip it
     if not namei:
         print "WARNING: No object name provided. Skipping the object."
-        return
+        return ''
 
     # Check if the current object name is supported. If it is not, print a
     # warning and skip it. If it is, run the desired workflow.
@@ -196,7 +216,7 @@ def process_object(model, i):
     else:
         print "WARNING: No existing workflow for object name {0}".format(
             namei)
-        return
+        return ''
     print "Running morphome workflow: {0}()".format(workflow)
 
     # Extract the object to a new, temporary model file
@@ -206,13 +226,65 @@ def process_object(model, i):
     # workflow/organelle name.
     basename = 'obj_' + str(i+1).zfill(4) + '_' + workflow
 
+    # Make output directory for the object
+    os.makedirs(os.path.join(pathOut, filename, basename))
+
     # Run the corresponding function for the desired organelle workflow.
     try:
         func = globals()[workflow]
     except KeyError, e:
         print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
+        return ''
     else:
-        func(modi, basename)
+        func(modi, basename, filename)
+        return workflow
+
+def build_header_mitochondrion(filesIn):
+    # Construct generic CSV header string
+    headerStr = '\"Surface Area (um2)\",' \
+        '\"Volume (um3)\",' \
+        '\"Surface Area to Volume Ratio\",' \
+        '\"Sphericity\",' \
+        '\"Anisotropy\"' \
+        '\"Centroid (X, um)\",' \
+        '\"Centroid (Y, um)\",' \
+        '\"Centroid (Z, um)\",' \
+        '\"Crofton Perimeter (um)\",' \
+        '\"Elongation\",' \
+        '\"Euler Number 3D\",' \
+        '\"Equivalent Diameter (um)\",' \
+        '\"Feret Shape 3D\",' \
+        '\"Flatness\",' \
+        '\"Shape VA3D\",' \
+        '\"Orientation (phi)\",' \
+        '\"Orientation (theta)\",' \
+        '\"# Branches\",' \
+        '\"Total Length (um)\",' \
+        '\"# Nodes\",' \
+        '\"# Intermediate Nodes\",' \
+        '\"# Terminal Nodes\",' \
+        '\"# Branching Nodes\",' \
+        '\"# Isolated Nodes\"' \
+        
+    files = sorted(glob.glob(os.path.join(pathOut,
+        '*/obj*mitochondrion/*_length.csv')))
+
+    # Get the number of segments of each mitochondrion, and append to a list. 
+    nseglist = []
+    for fname in files:
+        nSegments, _, _, _ = morphome.readfile.skel_length(fname)
+        nseglist.append(nSegments)
+
+    # Get the maximum number of segments across all objects processed.
+    nsegmax = max(nseglist)
+    for i in range(nsegmax):
+        headeri = ',\"Branch {0} Length (um)\",' \
+            '\"Branch {0} Mean Radius (um)\",' \
+            '\"Branch {0} Orientation (theta)\",' \
+            '\"Branch {0} Orientation (phi)\"'.format(i+1)
+        headerStr += headeri
+
+    print headerStr
 
 if __name__ == '__main__':
     global opts, pathOut, pathHx, binAmira, orgDict
@@ -240,17 +312,28 @@ if __name__ == '__main__':
         filesIn = sorted(glob.glob(os.path.join(fileModel, '*.mod')))
     else:
         filesIn = [fileModel]
-
-    print filesIn
     
     # Loop over each model file.
+    workflows_run = []
     for fname in filesIn:
+        os.makedirs(os.path.join(pathOut, os.path.basename(fname)))
         print "Loading model file: {0}".format(fname)
         origModel = pyimod.ImodModel(fname)
         nObj = origModel.nObjects
         print "# Objects: {0}".format(nObj)
         print ""
-        
+
         # Loop over each object and execute the appropriate workflow
         for iObj in range(nObj): 
-            process_object(origModel, iObj)
+            workflow_name = process_object(origModel, iObj, os.path.basename(
+                fname))
+            if workflow_name and workflow_name not in workflows_run:
+                workflows_run.append(workflow_name)
+
+    for wname in workflows_run:
+        try:
+            func = globals()['build_header_' + wname]
+        except KeyError, e:
+            print "WARNING: No function for {0} workflow. Skipping the object.".format(wname)
+        else:
+            func(filesIn)
