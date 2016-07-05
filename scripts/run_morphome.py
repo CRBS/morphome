@@ -15,12 +15,18 @@ from optparse import OptionParser
 def parse_args():
     global p
     p = OptionParser(usage = "%prog [options] file.mod /path/for/output")
-    p.add_option("--writeTilesMitochondrion",
+    p.add_option("--write_tiles_mitochondrion",
                  action = "store_true",
                  default = False,
                  dest = "writeTilesMitochondrion",
                  help = "Toggles on writing of tiled animations for individual "
                         "mitochondria.")
+    p.add_option("--write_sql",
+                 dest = "write_sql",
+                 metavar = "FILE",
+                 help = "Toggles on writing of SQLite output to the specified "
+                        "file. If the file already exits, values will be added. "
+                        "If not, a new database will be generated." )
     (opts, args) = p.parse_args()
     fileModel, pathOut = check_args(args)
     return opts, fileModel, pathOut
@@ -109,29 +115,6 @@ def mitochondrion(model, basename, filename):
     else:
         cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
     subprocess.call(cmd.split())
-
-    # Process output files 
-    flength = os.path.join(pathouti, basename + '_length.csv')
-    fsav = os.path.join(pathouti, basename + '_sav.csv')
-    flabel = os.path.join(pathouti, basename + '_label.csv')
-    nSegments, lengthTot, segments, nodes = morphome.readfile.skel_length(
-        flength)
-    sa, volume = morphome.readfile.sav(fsav)
-    savratio, sphericity = morphome.utils.compute_sav_metrics(sa, volume)
-    label_metrics = morphome.readfile.label_csv(flabel)
-
-    # Convert metrics to microns as necessary
-    for i in 1,2,3,4,7:
-        label_metrics[i] = label_metrics[i] / 10000
-
-    # Create final CSV file containing all computed metrics
-    metrics = [sa, volume, savratio, sphericity] 
-    metrics.extend(label_metrics)
-    metrics.extend([nSegments, lengthTot])
-    metrics.extend(nodes)
-    for i in range(nSegments):
-        metrics.extend(segments[i,...])
-    print metrics
 
 def nucleus(model, basename, filename):
     scale = model.getScale()
@@ -243,51 +226,87 @@ def process_object(model, i, filename):
         func(modi, basename, filename)
         return workflow
 
-def build_header_mitochondrion(filesIn):
+def write_csv_mitochondrion(filesIn):
     # Construct generic CSV header string
-    headerStr = '\"Surface Area (um2)\",' \
-        '\"Volume (um3)\",' \
-        '\"Surface Area to Volume Ratio\",' \
-        '\"Sphericity\",' \
-        '\"Anisotropy\"' \
-        '\"Centroid (X, um)\",' \
-        '\"Centroid (Y, um)\",' \
-        '\"Centroid (Z, um)\",' \
-        '\"Crofton Perimeter (um)\",' \
-        '\"Elongation\",' \
-        '\"Euler Number 3D\",' \
-        '\"Equivalent Diameter (um)\",' \
-        '\"Feret Shape 3D\",' \
-        '\"Flatness\",' \
-        '\"Shape VA3D\",' \
-        '\"Orientation (phi)\",' \
-        '\"Orientation (theta)\",' \
-        '\"# Branches\",' \
-        '\"Total Length (um)\",' \
-        '\"# Nodes\",' \
-        '\"# Intermediate Nodes\",' \
-        '\"# Terminal Nodes\",' \
-        '\"# Branching Nodes\",' \
-        '\"# Isolated Nodes\"' \
-        
-    files = sorted(glob.glob(os.path.join(pathOut,
-        '*/obj*mitochondrion/*_length.csv')))
+    headerstr = 'surface_area,' \
+        'volume,' \
+        'sav_ratio,' \
+        'sphericity,' \
+        'anisotropy,' \
+        'centroid_x,' \
+        'centroid_y,' \
+        'centroid_z,' \
+        'crofton_perimeter,' \
+        'elongation,' \
+        'euler_number_3d,' \
+        'equivalent_diameter,' \
+        'feret_shape_3d,' \
+        'flatness,' \
+        'shape_va3d,' \
+        'orientation_phi,' \
+        'orientation_theta,' \
+        'n_branches,' \
+        'total_length,' \
+        'n_nodes,' \
+        'n_intermediate_nodes,' \
+        'n_terminal_nodes,' \
+        'n_branching_nodes,' \
+        'n_isolated_nodes' \
 
-    # Get the number of segments of each mitochondrion, and append to a list. 
+    # Construct a final header that is dependent on the maxmium number of
+    # segments across all mitochondria computed. First, get a list of all
+    # _length.csv files that contain branch data. Then, read each file and
+    # extract the number of segments. Once all files have been read, take the
+    # maximum number of segments across all mitochondria, and create a 
+    # correspondingly sized string to append to the generic header string.    
+    headerfiles = sorted(glob.glob(os.path.join(pathOut,
+        '*/obj*mitochondrion/*_length.csv'))) 
     nseglist = []
-    for fname in files:
+    for fname in headerfiles:
         nSegments, _, _, _ = morphome.readfile.skel_length(fname)
         nseglist.append(nSegments)
-
-    # Get the maximum number of segments across all objects processed.
     nsegmax = max(nseglist)
     for i in range(nsegmax):
-        headeri = ',\"Branch {0} Length (um)\",' \
-            '\"Branch {0} Mean Radius (um)\",' \
-            '\"Branch {0} Orientation (theta)\",' \
-            '\"Branch {0} Orientation (phi)\"'.format(i+1)
-        headerStr += headeri
-    return headerStr
+        headeri = ',branch_{0}_length,' \
+            'branch_{0}_mean_radius,' \
+            'branch_{0}_orientation_theta,' \
+            'branch_{0}_orientation_phi'.format(i+1)
+        headerstr += headeri
+    headerlen = headerstr.count(',') + 1
+
+    for modelfile in filesIn:
+        filecsv = os.path.join(pathOut, modelfile, 'mitochondrion.csv')
+        fid = open(filecsv, 'a+')
+        fid.write(headerstr + '\n') 
+        objects = sorted(glob.glob(os.path.join(pathOut, modelfile, 'obj*mitochondrion')))
+        for objectpath in objects:
+            flength = glob.glob(os.path.join(objectpath, '*_length.csv'))[0]
+            fsav = glob.glob(os.path.join(objectpath, '*_sav.csv'))[0]
+            flabel = glob.glob(os.path.join(objectpath, '*_label.csv'))[0]
+            nSegments, lengthTot, segments, nodes = morphome.readfile.skel_length(flength)
+            sa, volume = morphome.readfile.sav(fsav)
+            savratio, sphericity = morphome.utils.compute_sav_metrics(sa,
+                volume)
+            label_metrics = morphome.readfile.label_csv(flabel)
+
+            # Convert metrics to microns as necessary
+            for i in 1,2,3,4,7:
+                label_metrics[i] = label_metrics[i] / 10000
+
+            # Create final CSV file containing all computed metrics
+            metrics = [sa, volume, savratio, sphericity]
+            metrics.extend(label_metrics)
+            metrics.extend([nSegments, lengthTot])
+            metrics.extend(nodes)
+            for i in range(nSegments):
+                metrics.extend(segments[i,...])
+            metrics.extend([None] * (headerlen - len(metrics)))
+            fid.write(','.join([str(x) for x in metrics]) + '\n')
+            os.remove(flength)
+            os.remove(fsav)
+            os.remove(flabel)
+        fid.close()
+    return filecsv
 
 if __name__ == '__main__':
     global opts, pathOut, pathHx, binAmira, orgDict
@@ -316,7 +335,8 @@ if __name__ == '__main__':
     else:
         filesIn = [fileModel]
     
-    # Loop over each model file.
+    # Loop over each model file. Get the number of objects in the file, and then
+    # loop over each object, running the appropriate workflow.
     workflows_run = []
     for fname in filesIn:
         os.makedirs(os.path.join(pathOut, os.path.basename(fname)))
@@ -330,15 +350,23 @@ if __name__ == '__main__':
         for iObj in range(nObj): 
             workflow_name = process_object(origModel, iObj, os.path.basename(
                 fname))
-            if workflow_name and workflow_name not in workflows_run:
+            if workflow_name and (workflow_name not in workflows_run):
                 workflows_run.append(workflow_name)
 
     for wname in workflows_run:
         try:
-            func = globals()['build_header_' + wname]
+            func = globals()['write_csv_' + wname]
         except KeyError, e:
             print "WARNING: No function for {0} workflow. Skipping.".format(wname)
             break
         else:
-            headerStr = func(filesIn)
-            print headerStr 
+            file_csv = func(filesIn)
+            if opts.write_sql:
+                print "Writing to SQL file {0}".format(opts.write_sql)
+                conn, cur = morphome.sql.connect(opts.write_sql)
+                cur = morphome.sql.insert_dataset(cur, (81739, 'Mouse', 'Suprachiasmatic Nucleus', 4, 1))
+                cur = morphome.sql.insert_cell(cur, (2, 'Neuron'))
+                #cur = morphome.sql.insert_organelle(cur, wname)
+                cur = morphome.sql.read_csv(cur, wname, file_csv, 2)
+                conn.commit()
+                conn.close()
