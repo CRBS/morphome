@@ -7,16 +7,26 @@ import glob
 import shutil
 import subprocess
 import datetime
-import pyimod
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
-from morphome import *
+import json
 import numpy as np
 from optparse import OptionParser
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
+import morphome
+import pyimod
 
 def parse_args():
     global p
     p = OptionParser(usage = "%prog [options] file.mod /path/for/output")
+
+    p.add_option("--json",
+                 dest = "json",
+                 default = os.path.join(os.path.split(morphome.__file__)[0],
+                     'json', 'defaults.json'),
+                 metavar = "FILE",
+                 help = "JSON file to load.") 
+               
     p.add_option("--write_tiles_mitochondrion",
                  action = "store_true",
                  default = False,
@@ -86,26 +96,62 @@ def mitochondrion(model, basename, filename):
  
     pathouti = os.path.join(pathOut, filename, basename)
 
-    fnamewrl = os.path.join(pathouti, basename + '.wrl')
-    fnamehx = os.path.join(pathouti, basename + '.hx')
+    fnamewrl = os.path.abspath(os.path.join(pathouti, basename + '.wrl'))
+    fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
 
     # Run mitochondrion pre-processing
     morphome.preprocess.mitochondrion(model, fnamewrl)
 
     shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_mitochondrion.hx'),
         fnamehx)
+
+    # Compile regular expressions to match within the Amira script
     regex_filename = re.compile(r"<FILENAME>")
     regex_pathout = re.compile(r"<PATH_OUT>")
     regex_scale = re.compile(r"<SCALE>")
     regex_display = re.compile(r"<DISPLAY>")
+    regex_surfr = re.compile(r"<SURFACE_RED>")
+    regex_surfg = re.compile(r"<SURFACE_GREEN>")
+    regex_surfb = re.compile(r"<SURFACE_BLUE>")
+    regex_surfsi = re.compile(r"<SURFACE_SMOOTH_ITERATIONS>")
+    regex_surfsl = re.compile(r"<SURFACE_SMOOTH_LAMBDA>")
+    regex_skelw = re.compile(r"<SKELETON_WIDTH>")
+    regex_skelc1 = re.compile(r"<SKELETON_SMOOTH_COEFFICIENT1>")
+    regex_skelc2 = re.compile(r"<SKELETON_SMOOTH_COEFFICIENT2>")
+    regex_skelsi = re.compile(r"<SKELETON_SMOOTH_ITERATIONS>")
+    regex_noder = re.compile(r"<NODE_RED>")
+    regex_nodeg = re.compile(r"<NODE_GREEN>")
+    regex_nodeb = re.compile(r"<NODE_BLUE>")
+
+    # Parse through Amira script, replacing regular expression matches with the
+    # appropriate data  
     strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
+    data = json_data["mitochondrion"]    
+
     fid2 = open(fnamehx + '.new', 'w')
     with open(fnamehx, 'rw') as fid:
         for line in fid:
             line = regex_filename.sub(fnamewrl, line)
-            line = regex_pathout.sub(pathouti, line)
+            line = regex_pathout.sub(os.path.abspath(pathouti), line)
             line = regex_scale.sub(strScale, line)
-            line = regex_display.sub(str(int(opts.writeTilesMitochondrion)), line)
+            line = regex_display.sub(str(int(opts.writeTilesMitochondrion)),
+                line)
+            line = regex_surfr.sub(str(data["surface_red"]), line)
+            line = regex_surfg.sub(str(data["surface_green"]), line)
+            line = regex_surfb.sub(str(data["surface_blue"]), line)
+            line = regex_surfsi.sub(str(data["surface_smooth_iterations"]),
+                line)
+            line = regex_surfsl.sub(str(data["surface_smooth_lambda"]), line)
+            line = regex_skelw.sub(str(data["skeleton_width"]), line)
+            line = regex_skelc1.sub(str(data["skeleton_smooth_coefficient1"]),
+                line)
+            line = regex_skelc2.sub(str(data["skeleton_smooth_coefficient2"]),
+                line)
+            line = regex_skelsi.sub(str(data["skeleton_smooth_iterations"]),
+                line)
+            line = regex_noder.sub(str(data["node_red"]), line)
+            line = regex_nodeg.sub(str(data["node_green"]), line)
+            line = regex_nodeb.sub(str(data["node_blue"]), line) 
             fid2.write(line)
     fid.close()
     fid2.close()
@@ -311,12 +357,13 @@ def write_csv_mitochondrion(filesIn):
     return filecsv
 
 if __name__ == '__main__':
-    global opts, pathOut, pathHx, binAmira, orgDict
+    global opts, pathOut, pathHx, binAmira, orgDict, json_data
     opts, fileModel, pathOut = parse_args()
 
     # Set path for Amira 6.0 on NCMIR machines
     binAmira = '/usr/local/apps/Amira/6.0.0/bin/Amira'
     pathHx = os.path.split(morphome.__file__)[0]
+    print pathHx
 
     # Print morphome header
     print_header()
@@ -328,6 +375,11 @@ if __name__ == '__main__':
                'mitochondrion': 'mitochondrion',
                'mitochondria': 'mitochondrion',
                'mito': 'mitochondrion'}
+
+    # Read JSON settings file
+    print "Reading JSON settings file: {}".format(opts.json)
+    with open(opts.json) as file_json:
+        json_data = json.load(file_json)   
 
     # If the first supplied argument is a directory, parse the directory for
     # model files with the .mod extension. If it is a file, assume it is a
@@ -368,7 +420,6 @@ if __name__ == '__main__':
                 conn, cur = morphome.sql.connect(opts.write_sql)
                 cur = morphome.sql.insert_dataset(cur, (81739, 'Mouse', 'Suprachiasmatic Nucleus', 4, 1))
                 cur = morphome.sql.insert_cell(cur, (2, 'Neuron'))
-                #cur = morphome.sql.insert_organelle(cur, wname)
                 cur = morphome.sql.read_csv(cur, wname, file_csv, 2)
                 conn.commit()
                 conn.close()
