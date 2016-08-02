@@ -8,7 +8,9 @@ import shutil
 import subprocess
 import datetime
 import pyimod
-import morphome
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
+from morphome import *
 import numpy as np
 from optparse import OptionParser
 
