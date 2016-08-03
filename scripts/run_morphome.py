@@ -115,6 +115,7 @@ def mitochondrion(model, basename, filename):
     regex_surfr = re.compile(r"<SURFACE_RED>")
     regex_surfg = re.compile(r"<SURFACE_GREEN>")
     regex_surfb = re.compile(r"<SURFACE_BLUE>")
+    regex_surft = re.compile(r"<SURFACE_TRIANGLE_MULTIPLIER>")
     regex_surfsi = re.compile(r"<SURFACE_SMOOTH_ITERATIONS>")
     regex_surfsl = re.compile(r"<SURFACE_SMOOTH_LAMBDA>")
     regex_skelw = re.compile(r"<SKELETON_WIDTH>")
@@ -143,6 +144,8 @@ def mitochondrion(model, basename, filename):
             line = regex_surfr.sub(str(data["surface_red"]), line)
             line = regex_surfg.sub(str(data["surface_green"]), line)
             line = regex_surfb.sub(str(data["surface_blue"]), line)
+            line = regex_surft.sub(str(data["surface_triangle_multiplier"]),
+                line)
             line = regex_surfsi.sub(str(data["surface_smooth_iterations"]),
                 line)
             line = regex_surfsl.sub(str(data["surface_smooth_lambda"]), line)
@@ -175,10 +178,11 @@ def nucleus(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
 
-    # Get absolute paths for output VRML and .hx files
+    # Get absolute paths for output VRML, .hx, and IMOD model files
     pathouti = os.path.abspath(os.path.join(pathOut, filename, basename))
     fnamewrl = os.path.abspath(os.path.join(pathouti, basename + '.wrl'))
     fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
+    fnamemod = os.path.abspath(os.path.join(pathouti, basename + '.mod'))
 
     # Run nucleus pre-processing and convert to VRML
     morphome.preprocess.nucleus(model, fnamewrl)
@@ -188,16 +192,41 @@ def nucleus(model, basename, filename):
     shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_nucleus.hx'),
         fnamehx)
 
+    # Compile regular expressions to match within the Amira script
     regex_filename = re.compile(r"<FILENAME>")
     regex_pathout = re.compile(r"<PATH_OUT>")
     regex_scale = re.compile(r"<SCALE>")
+    regex_display = re.compile(r"<DISPLAY>")
+    regex_surfr = re.compile(r"<SURFACE_RED>")
+    regex_surfg = re.compile(r"<SURFACE_GREEN>")
+    regex_surfb = re.compile(r"<SURFACE_BLUE>")
+    regex_surft = re.compile(r"<SURFACE_TRIANGLE_MULTIPLIER>")
+    regex_surfsi = re.compile(r"<SURFACE_SMOOTH_ITERATIONS>")
+    regex_surfsl = re.compile(r"<SURFACE_SMOOTH_LAMBDA>")
+
+    # Parse through Amira script, replacing regular expression matches with the
+    # appropriate data supplied by the loaded JSON file.
     strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
+    data = json_data["nucleus"]
+
+    # Run through the copied .hx file line-by-line, and replace regular
+    # expression matches when encountered.
     fid2 = open(fnamehx + '.new', 'w')
     with open(fnamehx, 'rw') as fid:
         for line in fid:
             line = regex_filename.sub(fnamewrl, line)
             line = regex_pathout.sub(pathouti, line)
             line = regex_scale.sub(strScale, line)
+            line = regex_display.sub(str(int(opts.writeTilesMitochondrion)),
+                line)
+            line = regex_surfr.sub(str(data["surface_red"]), line)
+            line = regex_surfg.sub(str(data["surface_green"]), line)
+            line = regex_surfb.sub(str(data["surface_blue"]), line)
+            line = regex_surft.sub(str(data["surface_triangle_multiplier"]),
+                line)
+            line = regex_surfsi.sub(str(data["surface_smooth_iterations"]),
+                line)
+            line = regex_surfsl.sub(str(data["surface_smooth_lambda"]), line)
             fid2.write(line)
     fid.close()
     fid2.close()
@@ -207,32 +236,31 @@ def nucleus(model, basename, filename):
     cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx) 
     subprocess.call(cmd.split())
 
-    # Find nuclear envelope folds
-    fshapeindex = os.path.join(pathouti, basename + '_shapeindex.am')
-    fgrad = os.path.join(pathouti, basename + '_gradient.am')
-    fsurf = os.path.join(pathouti, basename + '_surface.surf')
-    fconvhull = os.path.join(pathouti, basename + '_convhull.surf')
-    shapeIndex = morphome.readfile.scalar_field(fshapeindex)
-    gradient = morphome.readfile.vector_field(fgrad)
-    vertices, indices = morphome.readfile.surface(fsurf)
-    vch, _ = morphome.readfile.surface(fconvhull)
+#    # Find nuclear envelope folds. First, declare filenames for relevant Amira
+#    # output files.
+#    fshapeindex = os.path.join(pathouti, basename + '_shapeindex.am')
+#    fgrad = os.path.join(pathouti, basename + '_gradient.am')
+#    fsurf = os.path.join(pathouti, basename + '_surface.surf')
+# 
+#    # Read relevant data from shape index and gradient scalar fields, as well as
+#    # mesh vertex and index data 
+#    shapeIndex = morphome.readfile.scalar_field(fshapeindex)
+#    gradient = morphome.readfile.vector_field(fgrad)
+#    vertices, indices = morphome.readfile.surface(fsurf)
+#
+#    # Identify the nuclear envelope folds. Returns the coordinates and surface
+#    # area of folded regions of the nuclear surface.
+#    nfolds, sa = morphome.nucleus.quantify_nuclear_folds(model, vertices,
+#        indices, shapeIndex, gradient)
+#
+#    # Read volume data from convex hull file
+#    fconvhull = os.path.join(pathouti, basename + '_convhull.surf')
+#    vch, _ = morphome.readfile.surface(fconvhull)
+#
+#    # Write IMOD model file with points added to denote fold locations.
+#    pyimod.ImodWrite(model, fnamemod)
 
-    coords, sa = morphome.nucleus.quantify_nuclear_folds(model, vertices,
-        indices, shapeIndex, gradient)
-
-    # Do convex hull stuff
-    nVertsCh = vch.shape[0]
-    for i in range(nVertsCh):
-        vch[i,:] = morphome.utils.transform_coords(model, vch[i,0], vch[i,1],
-            vch[i,2])
-        vch[i,:] = [int(x) for x in vch[i,:]] 
-    vch = vch[vch[:,2].argsort()]
-
-    for i in range(nVertsCh):
-        print vch[i,:]
-
-    pyimod.ImodWrite(model, 'blah.mod')
-
+    # Remove the last 'exit' line of the .hx script
     remove_last_line(fnamehx)
 
 def process_object(model, i, filename):
@@ -281,16 +309,13 @@ def process_object(model, i, filename):
         return ''
     else:
         func(modi, basename, filename)
-        return workflow
+        return modi, workflow
 
-def write_csv_mitochondrion(filesIn):
+def get_generic_header():
     """
-    Compiles an output CSV file for mitochondria metrics across all mito objects
-    and model files encountered. 
-    """
-
-    # Construct generic CSV header string consisting of the metrics that were
-    # computed for every individual mitochondrion.   
+    Returns a generic CSV header string that will be used for all organelle
+    types.
+    """ 
     headerstr = 'surface_area,' \
         'volume,' \
         'sav_ratio,' \
@@ -307,8 +332,42 @@ def write_csv_mitochondrion(filesIn):
         'flatness,' \
         'shape_va3d,' \
         'orientation_phi,' \
-        'orientation_theta,' \
-        'n_branches,' \
+        'orientation_theta,'
+    return headerstr
+
+def get_generic_metrics(fsav, flabel):
+    """
+    Reads surface area/volume and label files output from Amira and returns
+    metrics from each. The metrics read here are computed for every organelle
+    workflow, and so are generic across all. 
+    """
+    # Read SA and volume data 
+    sa, volume = morphome.readfile.sav(fsav)
+
+    # Compute metrics from SA and volume data 
+    savratio, sphericity = morphome.utils.compute_sav_metrics(sa,
+        volume)
+
+    # Read Amira label metrics
+    label_metrics = morphome.readfile.label_csv(flabel)
+
+    # Read Amira label metrics label_metrics = morphome.readfile.label_csv(flabel) 
+    # Convert metrics to microns as necessary
+    for i in 1,2,3,4,7:
+        label_metrics[i] = label_metrics[i] / 10000
+
+    return sa, volume, savratio, sphericity, label_metrics
+
+def write_csv_mitochondrion(model, filesIn):
+    """
+    Compiles an output CSV file for mitochondria metrics across all mito objects
+    and model files encountered. 
+    """
+
+    # Construct generic CSV header string consisting of the metrics that were
+    # computed for every individual mitochondrion. 
+    headerstr = get_generic_header()
+    headerstr += 'n_branches,' \
         'total_length,' \
         'n_nodes,' \
         'n_intermediate_nodes,' \
@@ -361,22 +420,12 @@ def write_csv_mitochondrion(filesIn):
             fsav = glob.glob(os.path.join(objectpath, '*_sav.csv'))[0]
             flabel = glob.glob(os.path.join(objectpath, '*_label.csv'))[0]
 
-            # Read skeleton lenght data
+            # Get generic metrics
+            sa, volume, savratio, sphericity, label_metrics = \
+                get_generic_metrics(fsav, flabel)
+
+            # Read skeleton length data
             nSegments, lengthTot, segments, nodes = morphome.readfile.skel_length(flength)
-
-            # Read SA and volume data 
-            sa, volume = morphome.readfile.sav(fsav)
-
-            # Compute metrics from SA and volume data 
-            savratio, sphericity = morphome.utils.compute_sav_metrics(sa,
-                volume)
-   
-            # Read Amira label metrics
-            label_metrics = morphome.readfile.label_csv(flabel)
-
-            # Convert metrics to microns as necessary
-            for i in 1,2,3,4,7:
-                label_metrics[i] = label_metrics[i] / 10000
 
             # Create a list containing all computed metrics
             metrics = [sa, volume, savratio, sphericity]
@@ -394,6 +443,103 @@ def write_csv_mitochondrion(filesIn):
             os.remove(flength)
             os.remove(fsav)
             os.remove(flabel)
+        fid.close()
+    return filecsv
+
+def write_csv_nucleus(model, filesIn):
+    """ 
+    Compiles an output CSV file for nucleus metrics across all mito objects and
+    model files encountered. 
+    """
+
+    # Construct generic CSV header string consisting of the metrics that were
+    # computed for every individual nuclei.
+    headerstr = get_generic_header()
+    headerstr += 'n_folds,' \
+        'surface_area_folds,' \
+        'fold_area_ratio,' \
+        'volume_convex_hull,' \
+        'convex_hull_difference,' \
+        'willmore_energy'
+
+    for modelfile in filesIn:
+        # Create a new CSV file for each file supplied, and open it to append to
+        modelname = os.path.split(modelfile)[-1] 
+        filecsv = os.path.join(pathOut, modelname, 'nucleus.csv')
+        print "Writing nucleus metrics for {0} to {1}".format(modelfile,
+            filecsv)
+        fid = open(filecsv, 'a+')
+
+        # Write CSV header to the file 
+        fid.write(headerstr + '\n') 
+
+        # Find all nucleus objects for the given model file. Loop over each 
+        # object.
+        objects = sorted(glob.glob(os.path.join(pathOut, modelname,
+            'obj*nucleus')))
+        for objectpath in objects:
+            basename = os.path.split(objectpath)[-1]
+
+            # Get Amira output file names
+            fsav = glob.glob(os.path.join(objectpath, '*_sav_nuc.csv'))[0]
+            flabel = glob.glob(os.path.join(objectpath, '*_label.csv'))[0]
+            fshapeindex = glob.glob(os.path.join(objectpath,
+                '*_shapeindex.am'))[0]
+            fgrad = glob.glob(os.path.join(objectpath, '*_gradient.am'))[0]
+            fsurf = glob.glob(os.path.join(objectpath, '*_surface.surf'))[0]
+            fconvhull = glob.glob(os.path.join(objectpath,
+                '*_sav_ch.csv'))[0]
+            fgauss = glob.glob(os.path.join(objectpath, '*_gausscurv.am'))[0]
+            fmean = glob.glob(os.path.join(objectpath, '*_meancurv.am'))[0]
+
+            # Get generic metrics
+            sa, volume, savratio, sphericity, label_metrics = \
+                get_generic_metrics(fsav, flabel)
+
+            # Read relevant data from shape index and gradient scalar fields,
+            # as well as mesh vertex and index data 
+            shapeIndex = morphome.readfile.scalar_field(fshapeindex)
+            gradient = morphome.readfile.vector_field(fgrad)
+            vertices, indices = morphome.readfile.surface(fsurf)
+
+            # Identify the nuclear envelope folds. Returns the number of folds
+            # and surface area of folded regions of the nuclear surface. The 
+            # ratio of folded to unfolded area is then computed.
+            n_folds, sa_folds = morphome.nucleus.quantify_nuclear_folds(model,
+                vertices, indices, shapeIndex, gradient)
+            fold_sa_ratio = sa_folds / sa
+
+            # Write IMOD model file with points added to denote fold locations.
+            fnamemod = os.path.join(objectpath, basename + '.mod')
+            pyimod.ImodWrite(model, fnamemod)
+
+            # Read volume data from convex hull file. Compute convex hull 
+            # difference.
+            _, vol_ch = morphome.readfile.sav(fconvhull)
+            ch_diff = vol_ch - volume 
+
+            # Compute Willmore energy
+            willmore_energy = morphome.nucleus.willmore_energy(fmean, fgauss,
+                fsurf)       
+
+            # Create a list containing all computed metrics
+            metrics = [sa, volume, savratio, sphericity]
+            metrics.extend(label_metrics)
+            metrics.extend([n_folds, sa_folds, fold_sa_ratio, vol_ch, ch_diff,
+                willmore_energy])
+
+            # Append the metrics list to the growing CSV file
+            fid.write(','.join([str(x) for x in metrics]) + '\n')
+
+            # Remove intermediate CSV files output by Amira
+            os.remove(fsav)
+            os.remove(flabel)
+            os.remove(fshapeindex)
+            os.remove(fgrad)
+            os.remove(fsurf)
+            os.remove(fconvhull)
+            os.remove(fgauss)
+            os.remove(fmean)
         fid.close()
     return filecsv
 
@@ -461,8 +607,8 @@ if __name__ == '__main__':
 
         # Loop over each object and execute the appropriate workflow
         for iObj in range(nObj): 
-            workflow_name = process_object(origModel, iObj, os.path.basename(
-                fname))
+            modi, workflow_name = process_object(origModel, iObj, 
+                os.path.basename(fname))
             if workflow_name and (workflow_name not in workflows_run):
                 workflows_run.append(workflow_name)
 
@@ -473,7 +619,7 @@ if __name__ == '__main__':
             print "WARNING: No function for {0} workflow. Skipping.".format(wname)
             break
         else:
-            file_csv = func(filesIn)
+            file_csv = func(modi, filesIn)
             if opts.write_sql:
                 print "Writing to SQL file {0}".format(opts.write_sql)
                 conn, cur = morphome.sql.connect(opts.write_sql)
