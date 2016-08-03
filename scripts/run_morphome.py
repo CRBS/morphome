@@ -85,7 +85,7 @@ def print_header():
     print "                     |_|                               "
     print ""
     print "   Quantifying morphology from microscopic big data    "
-    print "    https://github.com/slash-segmentation/morphome     "
+    print "           https://github.com/crbs/morphome     "
     print ""
     print "                 {0} {1}".format(date, time)
     print ""
@@ -93,15 +93,17 @@ def print_header():
 def mitochondrion(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
- 
-    pathouti = os.path.join(pathOut, filename, basename)
 
+    # Get absolute paths for output VRML and .hx files  
+    pathouti = os.path.join(pathOut, filename, basename)
     fnamewrl = os.path.abspath(os.path.join(pathouti, basename + '.wrl'))
     fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
 
-    # Run mitochondrion pre-processing
+    # Run mitochondrion pre-processing and convert to VRML
     morphome.preprocess.mitochondrion(model, fnamewrl)
 
+    # Copy mitochondrion .hx template file from the morphome/amira directory
+    # to the output path for the object's .hx file
     shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_mitochondrion.hx'),
         fnamehx)
 
@@ -124,10 +126,12 @@ def mitochondrion(model, basename, filename):
     regex_nodeb = re.compile(r"<NODE_BLUE>")
 
     # Parse through Amira script, replacing regular expression matches with the
-    # appropriate data  
+    # appropriate data supplied by the loaded JSON file.
     strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
     data = json_data["mitochondrion"]    
 
+    # Run through the copied .hx file line-by-line, and replace regular
+    # expression matches when encountered.
     fid2 = open(fnamehx + '.new', 'w')
     with open(fnamehx, 'rw') as fid:
         for line in fid:
@@ -164,18 +168,19 @@ def mitochondrion(model, basename, filename):
         cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
     subprocess.call(cmd.split())
 
+    # Remove the last 'exit' line of the .hx script
     remove_last_line(fnamehx)
 
 def nucleus(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
 
+    # Get absolute paths for output VRML and .hx files
     pathouti = os.path.abspath(os.path.join(pathOut, filename, basename))
-
     fnamewrl = os.path.abspath(os.path.join(pathouti, basename + '.wrl'))
     fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
 
-    # Run nucleus pre-processing
+    # Run nucleus pre-processing and convert to VRML
     morphome.preprocess.nucleus(model, fnamewrl)
 
     # Copy nucleus workflow template .hx file to the output path. Replace
@@ -332,8 +337,11 @@ def write_csv_mitochondrion(filesIn):
         headerstr += headeri
     headerlen = headerstr.count(',') + 1
 
+    # Loop over all files supplied. For each file, create a new CSV file
+    # specific to mitochondria, and store it within the file's output path.
+    # For each file, parse Amira outputs for each mito object, and append to
+    # the CSV file.  
     for modelfile in filesIn:
-
         # Create a new CSV file for each file supplied, and open it to append to
         modelname = os.path.split(modelfile)[-1] 
         filecsv = os.path.join(pathOut, modelname, 'mitochondrion.csv')
@@ -344,22 +352,33 @@ def write_csv_mitochondrion(filesIn):
         # Write global CSV header to the file 
         fid.write(headerstr + '\n') 
 
-        objects = sorted(glob.glob(os.path.join(pathOut, modelname, 'obj*mitochondrion')))
+        # Find all mito objects for the given model file. Loop over each object.
+        objects = sorted(glob.glob(os.path.join(pathOut, modelname,
+            'obj*mitochondrion')))
         for objectpath in objects:
+            # Get Amira output CSV file names
             flength = glob.glob(os.path.join(objectpath, '*_length.csv'))[0]
             fsav = glob.glob(os.path.join(objectpath, '*_sav.csv'))[0]
             flabel = glob.glob(os.path.join(objectpath, '*_label.csv'))[0]
+
+            # Read skeleton lenght data
             nSegments, lengthTot, segments, nodes = morphome.readfile.skel_length(flength)
+
+            # Read SA and volume data 
             sa, volume = morphome.readfile.sav(fsav)
+
+            # Compute metrics from SA and volume data 
             savratio, sphericity = morphome.utils.compute_sav_metrics(sa,
                 volume)
+   
+            # Read Amira label metrics
             label_metrics = morphome.readfile.label_csv(flabel)
 
             # Convert metrics to microns as necessary
             for i in 1,2,3,4,7:
                 label_metrics[i] = label_metrics[i] / 10000
 
-            # Create final CSV file containing all computed metrics
+            # Create a list containing all computed metrics
             metrics = [sa, volume, savratio, sphericity]
             metrics.extend(label_metrics)
             metrics.extend([nSegments, lengthTot])
@@ -367,7 +386,11 @@ def write_csv_mitochondrion(filesIn):
             for i in range(nSegments):
                 metrics.extend(segments[i,...])
             metrics.extend([None] * (headerlen - len(metrics)))
+
+            # Append the metrics list to the growing CSV file
             fid.write(','.join([str(x) for x in metrics]) + '\n')
+
+            # Remove intermediate CSV files output by Amira
             os.remove(flength)
             os.remove(fsav)
             os.remove(flabel)
