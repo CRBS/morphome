@@ -25,14 +25,7 @@ def parse_args():
                  default = os.path.join(os.path.split(morphome.__file__)[0],
                      'json', 'defaults.json'),
                  metavar = "FILE",
-                 help = "JSON file to load.") 
-               
-    p.add_option("--write_tiles_mitochondrion",
-                 action = "store_true",
-                 default = False,
-                 dest = "writeTilesMitochondrion",
-                 help = "Toggles on writing of tiled animations for individual "
-                        "mitochondria.")
+                 help = "JSON file to read default values from.") 
     p.add_option("--write_sql",
                  dest = "write_sql",
                  metavar = "FILE",
@@ -139,8 +132,7 @@ def mitochondrion(model, basename, filename):
             line = regex_filename.sub(fnamewrl, line)
             line = regex_pathout.sub(os.path.abspath(pathouti), line)
             line = regex_scale.sub(strScale, line)
-            line = regex_display.sub(str(int(opts.writeTilesMitochondrion)),
-                line)
+            line = regex_display.sub(str(data["write_animation"]), line)
             line = regex_surfr.sub(str(data["surface_red"]), line)
             line = regex_surfg.sub(str(data["surface_green"]), line)
             line = regex_surfb.sub(str(data["surface_blue"]), line)
@@ -165,7 +157,7 @@ def mitochondrion(model, basename, filename):
     shutil.move(fnamehx + '.new', fnamehx)
 
     # Run the script in Amira
-    if opts.writeTilesMitochondrion:
+    if data["write_animation"]:
         cmd = '{0} {1}'.format(binAmira, fnamehx)
     else:
         cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
@@ -217,8 +209,7 @@ def nucleus(model, basename, filename):
             line = regex_filename.sub(fnamewrl, line)
             line = regex_pathout.sub(pathouti, line)
             line = regex_scale.sub(strScale, line)
-            line = regex_display.sub(str(int(opts.writeTilesMitochondrion)),
-                line)
+            line = regex_display.sub(str(data["write_animation"]), line)
             line = regex_surfr.sub(str(data["surface_red"]), line)
             line = regex_surfg.sub(str(data["surface_green"]), line)
             line = regex_surfb.sub(str(data["surface_blue"]), line)
@@ -233,32 +224,11 @@ def nucleus(model, basename, filename):
     shutil.move(fnamehx + '.new', fnamehx)
 
     # Run the script in Amira
-    cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx) 
+    if data["write_animation"]:
+        cmd = '{0} {1}'.format(binAmira, fnamehx)
+    else:
+        cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
     subprocess.call(cmd.split())
-
-#    # Find nuclear envelope folds. First, declare filenames for relevant Amira
-#    # output files.
-#    fshapeindex = os.path.join(pathouti, basename + '_shapeindex.am')
-#    fgrad = os.path.join(pathouti, basename + '_gradient.am')
-#    fsurf = os.path.join(pathouti, basename + '_surface.surf')
-# 
-#    # Read relevant data from shape index and gradient scalar fields, as well as
-#    # mesh vertex and index data 
-#    shapeIndex = morphome.readfile.scalar_field(fshapeindex)
-#    gradient = morphome.readfile.vector_field(fgrad)
-#    vertices, indices = morphome.readfile.surface(fsurf)
-#
-#    # Identify the nuclear envelope folds. Returns the coordinates and surface
-#    # area of folded regions of the nuclear surface.
-#    nfolds, sa = morphome.nucleus.quantify_nuclear_folds(model, vertices,
-#        indices, shapeIndex, gradient)
-#
-#    # Read volume data from convex hull file
-#    fconvhull = os.path.join(pathouti, basename + '_convhull.surf')
-#    vch, _ = morphome.readfile.surface(fconvhull)
-#
-#    # Write IMOD model file with points added to denote fold locations.
-#    pyimod.ImodWrite(model, fnamemod)
 
     # Remove the last 'exit' line of the .hx script
     remove_last_line(fnamehx)
