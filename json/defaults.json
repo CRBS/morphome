@@ -15,7 +15,9 @@
 
         "node_red": 1,
         "node_green": 0,
-        "node_blue": 0 
+        "node_blue": 0, 
+
+        "write_animation": 0
     },
 
     "nucleus": {
@@ -25,6 +27,8 @@
         "surface_blue": 0,
         "surface_triangle_multiplier": 3,
         "surface_smooth_iterations": 10,
-        "surface_smooth_lambda": 0.8
+        "surface_smooth_lambda": 0.8,
+
+        "write_animation": 0
     }    
 }
