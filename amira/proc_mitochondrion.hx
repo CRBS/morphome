@@ -69,7 +69,8 @@ $module fire
 # placement and the same number of output triangles.
 set module "Remesh Surface"
 set nTriIn ["GeometrySurface" getNumTriangles]
-set nTriOut $nTriIn
+set nTriOut [expr $nTriIn * <SURFACE_TRIANGLE_MULTIPLIER>]
+
 create HxRemeshSurface $module
 $module select
 $module data connect "GeometrySurface"
