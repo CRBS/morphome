@@ -164,14 +164,16 @@ def mitochondrion(model, basename, filename):
         cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
     subprocess.call(cmd.split())
 
+    remove_last_line(fnamehx)
+
 def nucleus(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
 
-    pathouti = os.path.join(pathOut, filename, basename)
+    pathouti = os.path.abspath(os.path.join(pathOut, filename, basename))
 
-    fnamewrl = os.path.join(pathouti, basename + '.wrl')
-    fnamehx = os.path.join(pathouti, basename + '.hx')
+    fnamewrl = os.path.abspath(os.path.join(pathouti, basename + '.wrl'))
+    fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
 
     # Run nucleus pre-processing
     morphome.preprocess.nucleus(model, fnamewrl)
@@ -197,7 +199,7 @@ def nucleus(model, basename, filename):
     shutil.move(fnamehx + '.new', fnamehx)
 
     # Run the script in Amira
-    cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
+    cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx) 
     subprocess.call(cmd.split())
 
     # Find nuclear envelope folds
@@ -225,6 +227,8 @@ def nucleus(model, basename, filename):
         print vch[i,:]
 
     pyimod.ImodWrite(model, 'blah.mod')
+
+    remove_last_line(fnamehx)
 
 def process_object(model, i, filename):
     """
@@ -275,7 +279,13 @@ def process_object(model, i, filename):
         return workflow
 
 def write_csv_mitochondrion(filesIn):
-    # Construct generic CSV header string
+    """
+    Compiles an output CSV file for mitochondria metrics across all mito objects
+    and model files encountered. 
+    """
+
+    # Construct generic CSV header string consisting of the metrics that were
+    # computed for every individual mitochondrion.   
     headerstr = 'surface_area,' \
         'volume,' \
         'sav_ratio,' \
@@ -303,10 +313,10 @@ def write_csv_mitochondrion(filesIn):
 
     # Construct a final header that is dependent on the maxmium number of
     # segments across all mitochondria computed. First, get a list of all
-    # _length.csv files that contain branch data. Then, read each file and
+    # *_length.csv files that contain branch data. Then, read each file and
     # extract the number of segments. Once all files have been read, take the
     # maximum number of segments across all mitochondria, and create a 
-    # correspondingly sized string to append to the generic header string.    
+    # correspondingly sized string to append to the generic header string.
     headerfiles = sorted(glob.glob(os.path.join(pathOut,
         '*/obj*mitochondrion/*_length.csv'))) 
     nseglist = []
@@ -323,10 +333,18 @@ def write_csv_mitochondrion(filesIn):
     headerlen = headerstr.count(',') + 1
 
     for modelfile in filesIn:
-        filecsv = os.path.join(pathOut, modelfile, 'mitochondrion.csv')
+
+        # Create a new CSV file for each file supplied, and open it to append to
+        modelname = os.path.split(modelfile)[-1] 
+        filecsv = os.path.join(pathOut, modelname, 'mitochondrion.csv')
+        print "Writing mitochondrion metrics for {0} to {1}".format(modelfile,
+            filecsv)
         fid = open(filecsv, 'a+')
+
+        # Write global CSV header to the file 
         fid.write(headerstr + '\n') 
-        objects = sorted(glob.glob(os.path.join(pathOut, modelfile, 'obj*mitochondrion')))
+
+        objects = sorted(glob.glob(os.path.join(pathOut, modelname, 'obj*mitochondrion')))
         for objectpath in objects:
             flength = glob.glob(os.path.join(objectpath, '*_length.csv'))[0]
             fsav = glob.glob(os.path.join(objectpath, '*_sav.csv'))[0]
@@ -355,6 +373,24 @@ def write_csv_mitochondrion(filesIn):
             os.remove(flabel)
         fid.close()
     return filecsv
+
+def remove_last_line(fname):
+    """
+    Removes the last line of a supplied text file. In this case, the file is an
+    Amira .hx script and the final line is an 'exit' command. This will be 
+    removed so that a user can open the script directly after morphome is done
+    running, and visualize the results in Amira.  
+    """
+    fid = open(fname, 'r+')
+    fid.seek(0, os.SEEK_END)
+    pos = fid.tell() - 1
+    while pos > 0 and fid.read(1) != "\n":
+        pos -= 1
+        fid.seek(pos, os.SEEK_SET)
+    if pos > 0:
+        fid.seek(pos, os.SEEK_SET)
+        fid.truncate()
+    fid.close() 
 
 if __name__ == '__main__':
     global opts, pathOut, pathHx, binAmira, orgDict, json_data
