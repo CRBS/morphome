@@ -108,7 +108,7 @@ $module fire
 # finer sampling of the Shape Index across the surface.
 set module "Remesh Surface"
 set nTriIn ["GeometrySurface" getNumTriangles]
-set nTriOut [expr $nTriIn * 3]
+set nTriOut [expr $nTriIn * <SURFACE_TRIANGLE_MULTIPLIER>]
 create HxRemeshSurface $module
 $module select
 $module data connect "GeometrySurface"
@@ -134,8 +134,8 @@ $module fire
 # unsuccessful, the lambda value will be decreased. If no valid smoothed
 # surface can be found, the program will print a warning and exit.
 set validSurf 0
-set smoothVal1 10
-set smoothVal2 0.8 
+set smoothVal1 <SURFACE_SMOOTH_ITERATIONS>
+set smoothVal2 <SURFACE_SMOOTH_LAMBDA>
 while {!$validSurf} {
     echo "Trying smoothing with $smoothVal1, $smoothVal2"
     set validSurf [calcShapeIndex $smoothVal1 $smoothVal2]
@@ -277,7 +277,7 @@ $module fire
 set fname_gradient [file join $pathOut ${base}_gradient.am]
 set fname_shapeindex [file join $pathOut ${base}_shapeindex.am]
 set fname_surface [file join $pathOut ${base}_surface.surf]
-set fname_convhull [file join $pathOut ${base}_convhull.surf]
+#set fname_convhull [file join $pathOut ${base}_convhull.surf]
 set fname_labelcsv [file join $pathOut ${base}_label.csv]
 set fname_savcsv_nuc [file join $pathOut ${base}_sav_nuc.csv]
 set fname_savcsv_ch [file join $pathOut ${base}_sav_ch.csv]
@@ -289,7 +289,7 @@ set fname_gausscurv [file join $pathOut ${base}_gausscurv.am]
 "MeanCurvature" exportData "Amira ASCII" $fname_meancurv
 "GaussCurvature" exportData "Amira ASCII" $fname_gausscurv
 "GeometrySurface.smooth" exportData "HxSurface ASCII" $fname_surface
-"GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
+#"GeometrySurface-convexHull" exportData "HxSurface ASCII" $fname_convhull
 "GeometrySurface.Label-Analysis" exportData "CSV" $fname_labelcsv
 "GeometrySurface.statistics" exportData "CSV" $fname_savcsv_nuc
 "GeometrySurface-convexHull.statistics" exportData "CSV" $fname_savcsv_ch
