@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
+
 import sys
 import os
 import re
@@ -10,9 +13,6 @@ import datetime
 import json
 import numpy as np
 from optparse import OptionParser
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
 import morphome
 import pyimod
 
@@ -83,6 +83,107 @@ def print_header():
     print "                 {0} {1}".format(date, time)
     print ""
 
+def get_generic_metrics(fsav, flabel):
+    """
+    Reads surface area/volume and label files output from Amira and returns
+    metrics from each. The metrics read here are computed for every organelle
+    workflow, and so are generic across all. 
+    """
+    # Read SA and volume data 
+    sa, volume = morphome.readfile.sav(fsav)
+
+    # Compute metrics from SA and volume data 
+    savratio, sphericity = morphome.utils.compute_sav_metrics(sa,
+        volume)
+
+    # Read Amira label metrics
+    label_metrics = morphome.readfile.label_csv(flabel)
+
+    # Read Amira label metrics label_metrics = morphome.readfile.label_csv(flabel) 
+    # Convert metrics to microns as necessary
+    for i in 1,2,3,4,7:
+        label_metrics[i] = label_metrics[i] / 10000
+
+    return sa, volume, savratio, sphericity, label_metrics
+
+def get_generic_header():
+    """
+    Returns a generic CSV header string that will be used for all organelle
+    types.
+    """
+    headerstr = 'surface_area,' \
+        'volume,' \
+        'sav_ratio,' \
+        'sphericity,' \
+        'anisotropy,' \
+        'centroid_x,' \
+        'centroid_y,' \
+        'centroid_z,' \
+        'crofton_perimeter,' \
+        'elongation,' \
+        'euler_number_3d,' \
+        'equivalent_diameter,' \
+        'feret_shape_3d,' \
+        'flatness,' \
+        'shape_va3d,' \
+        'orientation_phi,' \
+        'orientation_theta,'
+    return headerstr
+
+def process_object(model, i, filename):
+    """
+    For an input model and object number, extracts the object to a new pyimod
+    ImodModel class instance, determines the object name, and executes the
+    appropriate workflow. If the object name is not part of the organelle
+    dictionary, print a warning message and exit.   
+    """
+    namei = model.Objects[i].name
+    print "Object {0}".format(i+1)
+    print "============"
+    print "Name: {0}".format(namei)
+    print "# Contours: {0}".format(model.Objects[i].nContours)
+
+    # If the current object name is empty, print a warning and skip it
+    if not namei:
+        print "WARNING: No object name provided. Skipping the object."
+        return ''
+
+    # Check if the current object name is supported. If it is not, print a
+    # warning and skip it. If it is, run the desired workflow.
+    if orgDict.has_key(namei.lower()):
+        workflow = orgDict[namei.lower()]
+    else:
+        print "WARNING: No existing workflow for object name {0}".format(
+            namei)
+        return ''
+    print "Running morphome workflow: {0}()".format(workflow)
+
+    # Extract the object to a new, temporary model file
+    modi = pyimod.ImodCmd(model, 'imodextract {0}'.format(i+1))
+
+    # Construct basename to consist of the object name followed by the 
+    # workflow/organelle name.
+    basename = 'obj_' + str(i+1).zfill(4) + '_' + workflow
+
+    # Make output directory for the object
+    os.makedirs(os.path.join(pathOut, filename, basename))
+
+    # Run the corresponding function for the desired organelle workflow.
+    try:
+        func = globals()[workflow]
+    except KeyError, e:
+        print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
+        return ''
+    else:
+        func(modi, basename, filename)
+        return modi, workflow
+
+def generic_organelle(model, basename, filename):
+    scale = model.getScale()
+    trans = model.getTrans()
+
+
+
 def mitochondrion(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
@@ -93,7 +194,7 @@ def mitochondrion(model, basename, filename):
     fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
 
     # Run mitochondrion pre-processing and convert to VRML
-    morphome.preprocess.mitochondrion(model, fnamewrl)
+    morphome.preprocess.generic_organelle(model, fnamewrl)
 
     # Copy mitochondrion .hx template file from the morphome/amira directory
     # to the output path for the object's .hx file
@@ -166,6 +267,9 @@ def mitochondrion(model, basename, filename):
     # Remove the last 'exit' line of the .hx script
     remove_last_line(fnamehx)
 
+def nucleolus(model, basename, filename):
+    generic_organelle(model, basename, filename)
+
 def nucleus(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
@@ -232,101 +336,6 @@ def nucleus(model, basename, filename):
 
     # Remove the last 'exit' line of the .hx script
     remove_last_line(fnamehx)
-
-def process_object(model, i, filename):
-    """
-    For an input model and object number, extracts the object to a new pyimod
-    ImodModel class instance, determines the object name, and executes the
-    appropriate workflow. If the object name is not part of the organelle
-    dictionary, print a warning message and exit.   
-    """
-    namei = model.Objects[i].name
-    print "Object {0}".format(i+1)
-    print "============"
-    print "Name: {0}".format(namei)
-    print "# Contours: {0}".format(model.Objects[i].nContours)
-
-    # If the current object name is empty, print a warning and skip it
-    if not namei:
-        print "WARNING: No object name provided. Skipping the object."
-        return ''
-
-    # Check if the current object name is supported. If it is not, print a
-    # warning and skip it. If it is, run the desired workflow.
-    if orgDict.has_key(namei.lower()):
-        workflow = orgDict[namei.lower()]
-    else:
-        print "WARNING: No existing workflow for object name {0}".format(
-            namei)
-        return ''
-    print "Running morphome workflow: {0}()".format(workflow)
-
-    # Extract the object to a new, temporary model file
-    modi = pyimod.ImodCmd(model, 'imodextract {0}'.format(i+1))
-
-    # Construct basename to consist of the object name followed by the 
-    # workflow/organelle name.
-    basename = 'obj_' + str(i+1).zfill(4) + '_' + workflow
-
-    # Make output directory for the object
-    os.makedirs(os.path.join(pathOut, filename, basename))
-
-    # Run the corresponding function for the desired organelle workflow.
-    try:
-        func = globals()[workflow]
-    except KeyError, e:
-        print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
-        return ''
-    else:
-        func(modi, basename, filename)
-        return modi, workflow
-
-def get_generic_header():
-    """
-    Returns a generic CSV header string that will be used for all organelle
-    types.
-    """ 
-    headerstr = 'surface_area,' \
-        'volume,' \
-        'sav_ratio,' \
-        'sphericity,' \
-        'anisotropy,' \
-        'centroid_x,' \
-        'centroid_y,' \
-        'centroid_z,' \
-        'crofton_perimeter,' \
-        'elongation,' \
-        'euler_number_3d,' \
-        'equivalent_diameter,' \
-        'feret_shape_3d,' \
-        'flatness,' \
-        'shape_va3d,' \
-        'orientation_phi,' \
-        'orientation_theta,'
-    return headerstr
-
-def get_generic_metrics(fsav, flabel):
-    """
-    Reads surface area/volume and label files output from Amira and returns
-    metrics from each. The metrics read here are computed for every organelle
-    workflow, and so are generic across all. 
-    """
-    # Read SA and volume data 
-    sa, volume = morphome.readfile.sav(fsav)
-
-    # Compute metrics from SA and volume data 
-    savratio, sphericity = morphome.utils.compute_sav_metrics(sa,
-        volume)
-
-    # Read Amira label metrics
-    label_metrics = morphome.readfile.label_csv(flabel)
-
-    # Read Amira label metrics label_metrics = morphome.readfile.label_csv(flabel) 
-    # Convert metrics to microns as necessary
-    for i in 1,2,3,4,7:
-        label_metrics[i] = label_metrics[i] / 10000
-
-    return sa, volume, savratio, sphericity, label_metrics
 
 def write_csv_mitochondrion(model, filesIn):
     """
