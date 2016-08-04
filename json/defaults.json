@@ -20,6 +20,17 @@
         "write_animation": 0
     },
 
+    "nucleolus": {
+        "surface_red": 0,
+        "surface_green": 0,
+        "surface_blue": 1,
+        "surface_triangle_multiplier": 1,
+        "surface_smooth_iterations": 10, 
+        "surface_smooth_lambda": 0.6 
+
+        "write_animation": 0
+    },  
+
     "nucleus": {
 
         "surface_red": 1,
