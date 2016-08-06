@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
-
 import sys
 import os
 import re
@@ -13,6 +10,9 @@ import datetime
 import json
 import numpy as np
 from optparse import OptionParser
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
 import morphome
 import pyimod
 
@@ -182,7 +182,67 @@ def generic_organelle(model, basename, filename):
     scale = model.getScale()
     trans = model.getTrans()
 
+    # Get absolute paths for output VRML and .hx files  
+    pathouti = os.path.join(pathOut, filename, basename)
+    fnamewrl = os.path.abspath(os.path.join(pathouti, basename + '.wrl'))
+    fnamehx = os.path.abspath(os.path.join(pathouti, basename + '.hx'))
 
+    # Run generic pre-processing and convert to VRML
+    morphome.preprocess.generic_organelle(model, fnamewrl)
+
+    # Copy mitochondrion .hx template file from the morphome/amira directory
+    # to the output path for the object's .hx file
+    shutil.copyfile(os.path.join(pathHx, 'amira', 'proc_generic.hx'), fnamehx)
+
+    # Compile regular expressions to match within the Amira script
+    regex_filename = re.compile(r"<FILENAME>")
+    regex_pathout = re.compile(r"<PATH_OUT>")
+    regex_scale = re.compile(r"<SCALE>")
+    regex_display = re.compile(r"<DISPLAY>")
+    regex_surfr = re.compile(r"<SURFACE_RED>")
+    regex_surfg = re.compile(r"<SURFACE_GREEN>")
+    regex_surfb = re.compile(r"<SURFACE_BLUE>")
+    regex_surft = re.compile(r"<SURFACE_TRIANGLE_MULTIPLIER>")
+    regex_surfsi = re.compile(r"<SURFACE_SMOOTH_ITERATIONS>")
+    regex_surfsl = re.compile(r"<SURFACE_SMOOTH_LAMBDA>")
+
+    # Parse through Amira script, replacing regular expression matches with the
+    # appropriate data supplied by the loaded JSON file.
+    strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
+    organelle_type = os.path.split(basename)[-1].split('_')[-1]
+    data = json_data[organelle_type]
+
+    # Run through the copied .hx file line-by-line, and replace regular
+    # expression matches when encountered.
+    fid2 = open(fnamehx + '.new', 'w')
+    with open(fnamehx, 'rw') as fid:
+        for line in fid:
+            line = regex_filename.sub(fnamewrl, line)
+            line = regex_pathout.sub(os.path.abspath(pathouti), line)
+            line = regex_scale.sub(strScale, line)
+            line = regex_display.sub(str(data["write_animation"]), line)
+            line = regex_surfr.sub(str(data["surface_red"]), line)
+            line = regex_surfg.sub(str(data["surface_green"]), line)
+            line = regex_surfb.sub(str(data["surface_blue"]), line)
+            line = regex_surft.sub(str(data["surface_triangle_multiplier"]),
+                line)
+            line = regex_surfsi.sub(str(data["surface_smooth_iterations"]),
+                line)
+            line = regex_surfsl.sub(str(data["surface_smooth_lambda"]), line)
+            fid2.write(line)
+    fid.close()
+    fid2.close()
+    shutil.move(fnamehx + '.new', fnamehx)
+
+    # Run the script in Amira
+    if data["write_animation"]:
+        cmd = '{0} {1}'.format(binAmira, fnamehx)
+    else:
+        cmd = '{0} -no_gui {1}'.format(binAmira, fnamehx)
+    subprocess.call(cmd.split())
+
+    # Remove the last 'exit' line of the .hx script
+    remove_last_line(fnamehx)
 
 def mitochondrion(model, basename, filename):
     scale = model.getScale()
@@ -223,7 +283,7 @@ def mitochondrion(model, basename, filename):
     # Parse through Amira script, replacing regular expression matches with the
     # appropriate data supplied by the loaded JSON file.
     strScale = '{0} {1} {2}'.format(scale[0], scale[1], scale[2])
-    data = json_data["mitochondrion"]    
+    data = json_data["mitochondrion"]
 
     # Run through the copied .hx file line-by-line, and replace regular
     # expression matches when encountered.
@@ -337,6 +397,52 @@ def nucleus(model, basename, filename):
     # Remove the last 'exit' line of the .hx script
     remove_last_line(fnamehx)
 
+def write_csv_generic(model, filesIn, organelle_type):
+    """
+    Compiles an output CSV file for generic organelle metrics across all objects
+    """
+
+    headerstr = get_generic_header()
+
+    for modelfile in filesIn:
+        # Create a new CSV file for each file supplied, and open it to append to
+        modelname = os.path.split(modelfile)[-1] 
+        filecsv = os.path.join(pathOut, modelname, organelle_type + '.csv')
+        print "Writing {0} metrics for {1} to {2}".format(organelle_type,
+            modelfile, filecsv)
+        fid = open(filecsv, 'a+')
+
+        # Write CSV header to the file 
+        fid.write(headerstr + '\n') 
+
+        # Find all organelle objects for the given model file. Loop over each 
+        # object.
+        objects = sorted(glob.glob(os.path.join(pathOut, modelname,
+            'obj*' + organelle_type)))
+        for objectpath in objects:
+            basename = os.path.split(objectpath)[-1]
+
+            # Get Amira output file names
+            fsav = glob.glob(os.path.join(objectpath, '*_sav.csv'))[0]
+            flabel = glob.glob(os.path.join(objectpath, '*_label.csv'))[0]
+
+            # Get generic metrics
+            sa, volume, savratio, sphericity, label_metrics = \
+                get_generic_metrics(fsav, flabel)
+
+            # Create a list containing all computed metrics
+            metrics = [sa, volume, savratio, sphericity]
+            metrics.extend(label_metrics)
+
+            # Append the metrics list to the growing CSV file
+            fid.write(','.join([str(x) for x in metrics]) + '\n')
+
+            # Remove intermediate CSV files output by Amira
+            os.remove(fsav)
+            os.remove(flabel)
+        fid.close()
+    return filecsv
+
 def write_csv_mitochondrion(model, filesIn):
     """
     Compiles an output CSV file for mitochondria metrics across all mito objects
@@ -424,6 +530,9 @@ def write_csv_mitochondrion(model, filesIn):
             os.remove(flabel)
         fid.close()
     return filecsv
+
+def write_csv_nucleolus(model, filesIn):
+    write_csv_generic(model, filesIn, "nucleolus")
 
 def write_csv_nucleus(model, filesIn):
     """ 
@@ -554,7 +663,9 @@ if __name__ == '__main__':
 
     # Set dictionary to support singular/plural versions of organelle names
     # as well as a variety of common spellings.
-    orgDict = {'nucleus': 'nucleus',
+    orgDict = {'nucleolus': 'nucleolus',
+               'nucleoli': 'nucleoli',
+               'nucleus': 'nucleus',
                'nuclei': 'nucleus',
                'mitochondrion': 'mitochondrion',
                'mitochondria': 'mitochondrion',
