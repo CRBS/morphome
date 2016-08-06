@@ -26,7 +26,7 @@
         "surface_blue": 1,
         "surface_triangle_multiplier": 1,
         "surface_smooth_iterations": 10, 
-        "surface_smooth_lambda": 0.6 
+        "surface_smooth_lambda": 0.6,
 
         "write_animation": 0
     },  
