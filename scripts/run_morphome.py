@@ -155,7 +155,7 @@ def process_object(model, i, filename):
     else:
         print "WARNING: No existing workflow for object name {0}".format(
             namei)
-        return ''
+        return 0, ''
     print "Running morphome workflow: {0}()".format(workflow)
 
     # Extract the object to a new, temporary model file
@@ -173,7 +173,7 @@ def process_object(model, i, filename):
         func = globals()[workflow]
     except KeyError, e:
         print "WARNING: No function for {0} workflow. Skipping the object.".format(workflow)
-        return ''
+        return modi, ''
     else:
         func(modi, basename, filename)
         return modi, workflow
